@@ -8,12 +8,12 @@ import { useAuth } from '../lib/auth';
 import { fmt, PLAN_STATUS_LABEL } from '../lib/data';
 import { CertaintyChip, GATE_LABEL, StatusChip } from './ui';
 import type { Status } from '../lib/rules';
+import { BASEMAPS, EMPTY_STYLE, loadBaseStyle, type BaseKey } from '../lib/basemaps';
 
-export type LayerKey = 'base' | 'city' | 'districts' | 'labels' | 'cells' | 'qpoints' | 'plans' | 'extrude' | 'transit' | 'official';
+export type LayerKey = 'city' | 'districts' | 'labels' | 'cells' | 'qpoints' | 'plans' | 'extrude' | 'transit' | 'official';
 interface LayerDef { key: LayerKey; title: string; certainty: string; source: string; available: boolean; note?: string; membersOnly?: boolean }
 
 export const LAYERS: LayerDef[] = [
-  { key: 'base', title: 'מפת רקע', certainty: 'osm', source: 'OpenStreetMap ו-CARTO', available: true },
   { key: 'city', title: 'גבול השיפוט', certainty: 'osm', source: 'OpenStreetMap, relation 1380013', available: true },
   { key: 'districts', title: 'מתחמי התכנית', certainty: 'assumption', source: 'גבול סכמטי: איחוד תאי רבעים לפי שיוך משוער למתחם. לא מנספח המתחמים', available: true },
   { key: 'labels', title: 'שמות ומצב המתחמים', certainty: 'plan-draft', source: 'הוראות תכנית 603-0528026, פרק 4.3', available: true },
@@ -24,7 +24,7 @@ export const LAYERS: LayerDef[] = [
   { key: 'transit', title: 'ציר מתע"ן ואזורי חניה', certainty: 'missing', source: 'חסר: תוואי מתע"ן עדכני', available: false, note: 'כשיוזן תוואי, יוצגו אזורי חניה א ו-ב (300 ו-600 מ\')' },
   { key: 'official', title: 'גבולות מתחמים רשמיים', certainty: 'missing', source: 'חסר: נספח מתחמים כ-GeoJSON', available: false, note: 'יחליף את הגבול הסכמטי כשיסופק' },
 ];
-const DEFAULT_LAYERS: LayerKey[] = ['base', 'city', 'districts', 'labels', 'plans'];
+const DEFAULT_LAYERS: LayerKey[] = ['city', 'districts', 'labels', 'plans'];
 
 export type Theme = 'gate' | 'target' | 'units';
 const THEMES: { key: Theme; title: string }[] = [
@@ -53,11 +53,17 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const flown = useRef<number | null>(null);
+  const styleOk = useRef(false);
+  const [styleRev, setStyleRev] = useState(0);
+  const loaded = styleRev > 0;
+  const [baseNote, setBaseNote] = useState<string | null>(null);
   const [panel, setPanel] = useState(() => full && window.innerWidth > 720);
 
   const active = useMemo(() => new Set((params.get('layers')?.split(',').filter(Boolean) as LayerKey[]) ?? DEFAULT_LAYERS), [params]);
   const theme = (params.get('theme') as Theme) || 'gate';
+  const base = ((params.get('base') as BaseKey) || 'streets') as BaseKey;
+  const sat = base === 'sat';
   const selected = focus ?? (params.get('d') ? Number(params.get('d')) : null);
 
   const update = (k: string, v: string | null) => {
@@ -93,49 +99,57 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
     features: plans.filter((p) => p.location).map((p) => ({ type: 'Feature', geometry: p.location!, properties: { id: p.id, name: p.name, approved: p.status === 'approved' ? 1 : 0 } })),
   }), [plans]);
 
-  // create map once
+  // create map once; the overlay is re-added after every style change (background switch)
   useEffect(() => {
     if (!box.current) return;
     const map = new maplibregl.Map({
-      container: box.current,
-      style: {
-        version: 8,
-        sources: {
-          base: { type: 'raster', tiles: ['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', 'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors © CARTO' },
-        },
-        layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eef0f2' } }, { id: 'base', type: 'raster', source: 'base', paint: { 'raster-saturation': -0.9, 'raster-opacity': 0.9 } }],
-      },
+      container: box.current, style: EMPTY_STYLE,
       center: [34.655, 31.795], zoom: 11.6, pitch: 0, attributionControl: { compact: true },
     });
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
-    let ready = false;
-    const setup = () => {
-      if (ready) return; ready = true;
-      map.addImage('hatch', hatch());
-      const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-      for (const s of ['city', 'districts', 'cells', 'qpoints', 'plans']) map.addSource(s, { type: 'geojson', data: empty });
-      map.addLayer({ id: 'districts-fill', type: 'fill', source: 'districts', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.42 } });
-      map.addLayer({ id: 'districts-hatch', type: 'fill', source: 'districts', filter: ['==', ['get', 'missing'], 1], paint: { 'fill-pattern': 'hatch', 'fill-opacity': 0.8 } });
-      map.addLayer({ id: 'districts-line', type: 'line', source: 'districts', paint: { 'line-color': '#2b3038', 'line-width': ['case', ['boolean', ['feature-state', 'sel'], false], 3.2, 1.3] } });
-      map.addLayer({ id: 'extrude', type: 'fill-extrusion', source: 'districts', paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.78 } });
-      map.addLayer({ id: 'cells-line', type: 'line', source: 'cells', paint: { 'line-color': '#5d646f', 'line-width': 0.8, 'line-dasharray': [2, 2] } });
-      map.addLayer({ id: 'city-line', type: 'line', source: 'city', paint: { 'line-color': '#15181d', 'line-width': 2.4 } });
-      map.addLayer({ id: 'qpoints', type: 'circle', source: 'qpoints', paint: { 'circle-radius': 3.5, 'circle-color': '#fff', 'circle-stroke-color': '#2b3038', 'circle-stroke-width': 1.5 } });
-      map.addLayer({ id: 'plans', type: 'circle', source: 'plans', paint: { 'circle-radius': 8, 'circle-color': ['case', ['==', ['get', 'approved'], 1], '#2b3038', '#ffffff'], 'circle-stroke-color': '#2b3038', 'circle-stroke-width': 2.5 } });
-      map.on('click', 'districts-fill', (e) => { const id = e.features?.[0]?.properties?.id; if (id) clickDistrict.current(Number(id)); });
-      map.on('click', 'plans', (e) => { const id = e.features?.[0]?.properties?.id; if (id) clickPlan.current(String(id)); });
-      for (const l of ['districts-fill', 'plans']) {
-        map.on('mouseenter', l, () => (map.getCanvas().style.cursor = 'pointer'));
-        map.on('mouseleave', l, () => (map.getCanvas().style.cursor = ''));
+    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    const addOverlay = () => {
+      if (!map.hasImage('hatch')) map.addImage('hatch', hatch());
+      if (!map.getSource('districts')) {
+        const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+        for (const s of ['city', 'districts', 'cells', 'qpoints', 'plans']) map.addSource(s, { type: 'geojson', data: empty });
+        map.addLayer({ id: 'districts-fill', type: 'fill', source: 'districts', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.3 } });
+        map.addLayer({ id: 'districts-hatch', type: 'fill', source: 'districts', filter: ['==', ['get', 'missing'], 1], paint: { 'fill-pattern': 'hatch', 'fill-opacity': 0.55 } });
+        map.addLayer({ id: 'districts-line', type: 'line', source: 'districts', paint: { 'line-color': '#2b3038', 'line-width': ['case', ['boolean', ['feature-state', 'sel'], false], 3.4, 1.6] } });
+        map.addLayer({ id: 'extrude', type: 'fill-extrusion', source: 'districts', paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-opacity': 0.78 } });
+        map.addLayer({ id: 'cells-line', type: 'line', source: 'cells', paint: { 'line-color': '#5d646f', 'line-width': 0.9, 'line-dasharray': [2, 2] } });
+        map.addLayer({ id: 'city-line', type: 'line', source: 'city', paint: { 'line-color': '#15181d', 'line-width': 2.6 } });
+        map.addLayer({ id: 'qpoints', type: 'circle', source: 'qpoints', paint: { 'circle-radius': 3.5, 'circle-color': '#fff', 'circle-stroke-color': '#2b3038', 'circle-stroke-width': 1.5 } });
+        map.addLayer({ id: 'plans', type: 'circle', source: 'plans', paint: { 'circle-radius': 8, 'circle-color': ['case', ['==', ['get', 'approved'], 1], '#2b3038', '#ffffff'], 'circle-stroke-color': '#2b3038', 'circle-stroke-width': 2.5 } });
       }
-      setLoaded(true);
+      styleOk.current = true;
+      setStyleRev((r) => r + 1);
     };
-    map.on('style.load', setup);
-    if (map.isStyleLoaded()) setup();
+    map.on('click', 'districts-fill', (e) => { const id = e.features?.[0]?.properties?.id; if (id) clickDistrict.current(Number(id)); });
+    map.on('click', 'plans', (e) => { const id = e.features?.[0]?.properties?.id; if (id) clickPlan.current(String(id)); });
+    for (const l of ['districts-fill', 'plans']) {
+      map.on('mouseenter', l, () => (map.getCanvas().style.cursor = 'pointer'));
+      map.on('mouseleave', l, () => (map.getCanvas().style.cursor = ''));
+    }
+    map.on('style.load', addOverlay);
+    if (map.isStyleLoaded()) addOverlay();
     mapRef.current = map;
     (window as unknown as { __map: MLMap }).__map = map;
     return () => { map.remove(); mapRef.current = null; };
   }, []);
+
+  // background map
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    let live = true;
+    loadBaseStyle(base).then(({ style, fellBack }) => {
+      if (!live || mapRef.current !== map) return;
+      setBaseNote(fellBack ? 'מפת הרחובות לא זמינה כרגע. מוצג רקע שקט.' : null);
+      styleOk.current = false;
+      map.setStyle(style, { diff: false });
+    });
+    return () => { live = false; };
+  }, [base]);
 
   const clickDistrict = useRef<(id: number) => void>(() => {});
   const clickPlan = useRef<(id: string) => void>(() => {});
@@ -145,46 +159,50 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
 
   // data
   useEffect(() => {
-    const map = mapRef.current; if (!map || !loaded) return;
+    const map = mapRef.current; if (!map || !loaded || !styleOk.current) return;
     (map.getSource('districts') as GeoJSONSource).setData(districtFC);
     (map.getSource('city') as GeoJSONSource).setData(fc('city'));
     (map.getSource('cells') as GeoJSONSource).setData(fc('quarter_cells'));
     (map.getSource('qpoints') as GeoJSONSource).setData(fc('quarter_points'));
     (map.getSource('plans') as GeoJSONSource).setData(planFC);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, districtFC, planFC, features]);
+  }, [styleRev, districtFC, planFC, features]);
 
   // visibility
   useEffect(() => {
-    const map = mapRef.current; if (!map || !loaded) return;
+    const map = mapRef.current; if (!map || !loaded || !styleOk.current) return;
     const vis = (on: boolean) => (on ? 'visible' : 'none');
-    map.setLayoutProperty('base', 'visibility', vis(active.has('base')));
     map.setLayoutProperty('city-line', 'visibility', vis(active.has('city')));
     for (const l of ['districts-fill', 'districts-hatch', 'districts-line']) map.setLayoutProperty(l, 'visibility', vis(active.has('districts')));
     map.setLayoutProperty('cells-line', 'visibility', vis(active.has('cells')));
     map.setLayoutProperty('qpoints', 'visibility', vis(active.has('qpoints')));
     map.setLayoutProperty('plans', 'visibility', vis(active.has('plans') && isMember));
     map.setLayoutProperty('extrude', 'visibility', vis(active.has('extrude')));
+    map.setPaintProperty('districts-line', 'line-color', sat ? '#ffffff' : '#2b3038');
+    map.setPaintProperty('city-line', 'line-color', sat ? '#ffe9a8' : '#15181d');
+    map.setPaintProperty('cells-line', 'line-color', sat ? '#e6e9ec' : '#5d646f');
+    map.setPaintProperty('districts-fill', 'fill-opacity', sat ? 0.22 : 0.3);
     if (active.has('extrude') && map.getPitch() < 30) map.easeTo({ pitch: 55, bearing: -18, duration: 900 });
     if (!active.has('extrude') && map.getPitch() > 0) map.easeTo({ pitch: 0, bearing: 0, duration: 700 });
-  }, [active, loaded, isMember]);
+  }, [active, styleRev, isMember, sat]);
 
   // selection highlight + fly
   useEffect(() => {
-    const map = mapRef.current; if (!map || !loaded) return;
+    const map = mapRef.current; if (!map || !loaded || !styleOk.current) return;
     for (const d of districts) if (d.geom) map.setFeatureState({ source: 'districts', id: d.id }, { sel: d.id === selected });
     const d = districts.find((x) => x.id === selected);
-    if (d?.geom) {
+    if (d?.geom && flown.current !== selected) {
+      flown.current = selected;
       const b = new maplibregl.LngLatBounds();
       const walk = (c: unknown): void => { if (typeof (c as number[])[0] === 'number') b.extend(c as [number, number]); else (c as unknown[]).forEach(walk); };
       walk((d.geom as GeoJSON.Polygon).coordinates);
       map.fitBounds(b, { padding: full ? 120 : 50, duration: 900, maxZoom: 14 });
     }
-  }, [selected, loaded, districts, full]);
+  }, [selected, styleRev, districts, full]);
 
   // HTML labels (no glyph server needed)
   useEffect(() => {
-    const map = mapRef.current; if (!map || !loaded) return;
+    const map = mapRef.current; if (!map || !loaded || !styleOk.current) return;
     markers.current.forEach((m) => m.remove()); markers.current = [];
     if (!active.has('labels')) return;
     for (const d of districts) {
@@ -209,39 +227,48 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
   return (
     <div className={`mapwrap ${full ? 'full' : ''}`}>
       <div ref={box} className="map" data-testid="map" />
-      <div className="map-tools">
-        <button type="button" className={`btn small ${panel ? 'on' : ''}`} onClick={() => setPanel(!panel)} aria-expanded={panel}>שכבות</button>
-        <div className="seg" role="tablist" aria-label="צביעת המתחמים">
-          {THEMES.map((t) => (
-            <button key={t.key} type="button" role="tab" aria-selected={theme === t.key} className={theme === t.key ? 'on' : ''} onClick={() => update('theme', t.key)}>{t.title}</button>
-          ))}
+      <div className="map-side">
+        <div className="map-tools">
+          <button type="button" className={`btn small ${panel ? 'on' : ''}`} onClick={() => setPanel(!panel)} aria-expanded={panel}>שכבות</button>
+          <div className="seg" role="tablist" aria-label="מפת רקע">
+            {BASEMAPS.map((b) => (
+              <button key={b.key} type="button" role="tab" aria-selected={base === b.key} className={base === b.key ? 'on' : ''} data-base={b.key} onClick={() => update('base', b.key)}>{b.title}</button>
+            ))}
+          </div>
+          <div className="seg" role="tablist" aria-label="צביעת המתחמים">
+            {THEMES.map((t) => (
+              <button key={t.key} type="button" role="tab" aria-selected={theme === t.key} className={theme === t.key ? 'on' : ''} onClick={() => update('theme', t.key)}>{t.title}</button>
+            ))}
+          </div>
         </div>
+        <AnimatePresence>
+          {panel && (
+            <motion.aside className="layer-panel" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
+              <h3>שכבות</h3>
+              <div className="ls">רקע: {BASEMAPS.find((b) => b.key === base)?.source}. ללא מפתח API.</div>
+              {baseNote && <div className="notice">{baseNote}</div>}
+              <ul>
+                {LAYERS.map((l) => {
+                  const locked = l.membersOnly && !isMember;
+                  return (
+                    <li key={l.key} className={!l.available || locked ? 'off' : ''}>
+                      <label>
+                        <input type="checkbox" data-layer={l.key} disabled={!l.available || locked} checked={l.available && !locked && active.has(l.key)} onChange={() => toggle(l.key)} />
+                        <span className="lt">{l.title}</span>
+                        <CertaintyChip certainty={l.certainty} />
+                      </label>
+                      <div className="ls">{locked ? 'לחברי הצוות בלבד, אחרי כניסה' : l.source}</div>
+                      {l.note && <div className="ls">{l.note}</div>}
+                    </li>
+                  );
+                })}
+              </ul>
+              <Legend theme={theme} />
+              {missingGeom.length > 0 && <div className="ls">בלי גבול על המפה: {missingGeom.map((d) => `${d.id} ${d.name}`).join(', ')} (חסר)</div>}
+            </motion.aside>
+          )}
+        </AnimatePresence>
       </div>
-      <AnimatePresence>
-        {panel && (
-          <motion.aside className="layer-panel" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
-            <h3>שכבות</h3>
-            <ul>
-              {LAYERS.map((l) => {
-                const locked = l.membersOnly && !isMember;
-                return (
-                  <li key={l.key} className={!l.available || locked ? 'off' : ''}>
-                    <label>
-                      <input type="checkbox" data-layer={l.key} disabled={!l.available || locked} checked={l.available && !locked && active.has(l.key)} onChange={() => toggle(l.key)} />
-                      <span className="lt">{l.title}</span>
-                      <CertaintyChip certainty={l.certainty} />
-                    </label>
-                    <div className="ls">{locked ? 'לחברי הצוות בלבד, אחרי כניסה' : l.source}</div>
-                    {l.note && <div className="ls">{l.note}</div>}
-                  </li>
-                );
-              })}
-            </ul>
-            <Legend theme={theme} />
-            {missingGeom.length > 0 && <div className="ls">בלי גבול על המפה: {missingGeom.map((d) => `${d.id} ${d.name}`).join(', ')} (חסר)</div>}
-          </motion.aside>
-        )}
-      </AnimatePresence>
       <AnimatePresence>
         {sel && focus == null && (
           <motion.div className="map-card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} key={sel.id}>

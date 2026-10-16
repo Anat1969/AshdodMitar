@@ -29,7 +29,7 @@ Read first: `docs/SPEC.md`, `docs/RULES.md`, `data/districts.json`, `reference/r
 - Run `uipro init --ai claude` at project start.
 
 ## Fixed UI components
-- Fixed top bar on every page (drawers open below it): app name links home, "העתקת קישור" (copies current state incl. district/plan in URL), "שיחת הפיתוח" (link to the dev chat), "פרויקט המחקר" (link to the Claude project), install button.
+- Fixed top bar on every page (drawers open below it): app name links home, content navigation, and on the left ONE button "מערכת" that opens a panel with all technical buttons: "העתקת קישור" (copies current state incl. district, layers, theme, background), "שיחת הפיתוח", "פרויקט המחקר", "התקנת האפליקציה", and account (sign-in / sign-out).
 - Real home page that maps the content (city gauge + district map).
 
 ## Design language
@@ -43,10 +43,14 @@ Architectural, minimal, greys, depth (shadows, layers, gradients, subtle motion)
 Commit and push. If a work branch is required: PR, then merge to `main` immediately after green tests. Anat has given standing approval to merge.
 
 ## Map layers
+- Background maps, free and keyless, switchable in the map (`?base=`): `streets` OpenFreeMap positron vector with Hebrew names (default), `sat` Esri World Imagery, `plain` CARTO light (also the automatic fallback). Hebrew shaping: `public/vendor/mapbox-gl-rtl-text.js`. Code: `src/lib/basemaps.ts`. The overlay is re-added on every `style.load`.
 - City boundary: OSM (real). Quarter centres: OSM (real). Quarter cells and district boundaries: schematic, labeled "הנחת עבודה". The quarter-to-district assignment is an assumption and lives in `mt_districts.quarters`.
 - District 8 (פארק לכיש מזרח) has no geometry: shown as "גבול חסר".
 - Missing layers shown disabled with "חסר": mass-transit axis and parking zones, official district boundaries (נספח מתחמים).
 - When the official GeoJSON arrives: write it to `mt_districts.geom`, set `geom_certainty='plan-draft'`, and update the layer label in `LAYERS`.
+
+## Documents
+- `/documents`: upload any file type (up to 50MB) with name, document date, optional district/plan and note. Table `mt_documents`, private storage bucket `mt-documents`, opened via 5-minute signed URLs. Read: members. Write/delete: editor/admin.
 
 ## Known pitfalls
 - RTL horizontal scroll: top grid `grid-template-columns:minmax(0,1fr)`, `min-width:0` on button rows; motion wrappers in flex rows need `flex:0 0 auto`.
@@ -65,4 +69,6 @@ Final URL + one line on what was built. Update this file.
 - Production: https://ashdod-mitar-twin.vercel.app (Vercel project `ashdod-mitar-twin`, deploys from `main`).
 
 ## Corrections log
-(empty)
+- 2026-10-16: show the real Ashdod map under the markings, using a free API (done: OpenFreeMap, Esri imagery, CARTO).
+- 2026-10-16: all technical buttons go behind one button on the left of the top bar ("מערכת").
+- 2026-10-16: a place to upload documents of any type, with name and date ("מסמכים").
