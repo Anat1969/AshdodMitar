@@ -53,6 +53,7 @@ export default function TopBar() {
             <NavLink to="/rules">כללים</NavLink>
             <NavLink to="/register">מרשם מדיניות</NavLink>
             <NavLink to={`/report/${new Date().getFullYear()}`}>דוח 6.2</NavLink>
+            <NavLink to="/about">איך זה עובד</NavLink>
           </nav>
           <div className="tb-actions">
             <button type="button" className={`btn small sys-btn ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="sys-panel">

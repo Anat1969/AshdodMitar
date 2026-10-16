@@ -99,3 +99,31 @@ create policy mt_documents_obj_read on storage.objects for select to authenticat
 create policy mt_documents_obj_insert on storage.objects for insert to authenticated with check (bucket_id = 'mt-documents' and public.mt_role() in ('editor','admin'));
 create policy mt_documents_obj_update on storage.objects for update to authenticated using (bucket_id = 'mt-documents' and public.mt_role() in ('editor','admin'));
 create policy mt_documents_obj_remove on storage.objects for delete to authenticated using (bucket_id = 'mt-documents' and public.mt_role() in ('editor','admin'));
+
+-- Real geography and topics (added 2026-10-16)
+-- Certainty now also allows 'municipal' (Ashdod municipal GIS).
+alter table mt_map_features drop constraint if exists mt_map_features_certainty_check;
+alter table mt_map_features add constraint mt_map_features_certainty_check check (certainty in ('statutory','plan-draft','policy-draft','assumption','missing','osm','municipal'));
+-- layer 'quarters_official': 35 quarter polygons from https://gis.ashdod.muni.il/arcgis/rest/services/Map/MapServer/0 (outSR=4326),
+--   plus רובע ז from OSM way 898037027 (missing in the municipal layer). props.label = ST_MaximumInscribedCircle centre.
+-- mt_districts.quarters now holds 'rova-<rova_code>' ids; geom = ST_Union of those quarters; label_pt = inscribed-circle centre.
+alter table mt_districts add column if not exists mapped_area_m2 bigint;
+alter table mt_districts add column if not exists label_pt jsonb;
+-- Assignment (assumption, checked against the plan's district areas: 1,2,4,6 within 3%):
+--   1: סיטי, מרינה, מע"ר דרום, מע"ר צפון | 2: רובעים א-ו | 3: קריית חלוצים, קריית פארק לכיש, קריית איתנים, בקמה
+--   4: ז, ח, ט, אלתא | 5: עד הלום, משולש חקלאי | 6: י"א, י"ב, י"ג, ט"ו, ט"ז, י"ז | 7: י, שמעון פרס | 8: בית העלמין | 9: נמל, עורף הנמל, פארק עוגנים
+
+-- What exists, by topic. Education: 876 institutions from the municipal GIS (planning fields only, no personal data).
+create table if not exists mt_existing (
+  id text primary key, topic text not null, subtype text, name text, qty jsonb default '{}'::jsonb,
+  geom jsonb not null, district_id int, quarter_id text, source text, certainty text, updated_at timestamptz default now());
+alter table mt_existing enable row level security;
+create policy mt_existing_public_read on mt_existing for select to anon, authenticated using (true);
+create policy mt_existing_write on mt_existing for all to authenticated using (mt_role() in ('editor','admin')) with check (mt_role() in ('editor','admin'));
+grant select on mt_existing to anon; grant select, insert, update, delete on mt_existing to authenticated;
+
+-- Plan program for the bill of quantities: classrooms, kindergartens, education_dunam, open_space_m2, commerce_m2, office_m2, roads_m
+alter table mt_plans add column if not exists program jsonb default '{}'::jsonb;
+-- staging for OSM lookups
+create table if not exists mt_osm_raw (id text primary key, qname text, osm_type text, osm_id text, name text, category text, type text, geom jsonb, fetched_at timestamptz default now());
+alter table mt_osm_raw enable row level security;
