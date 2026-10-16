@@ -1,0 +1,278 @@
+{
+  "T1": [
+    {
+      "id": "R01",
+      "status": "pass",
+      "values": {
+        "smallShare": 0.2,
+        "mediumShare": 0.1,
+        "restAvgArea": 120
+      },
+      "message": "קטנות 20.0% (נדרש 20%), עד 80 מ\"ר 10.0% (נדרש 10%), ממוצע יתרה 120 מ\"ר (עד 125)"
+    },
+    {
+      "id": "R02",
+      "status": "info",
+      "values": {
+        "householdSize": 3.3,
+        "population": 1320
+      },
+      "message": "400 יח\"ד כפול 3.3 = 1320 תושבים"
+    },
+    {
+      "id": "R03",
+      "status": "info",
+      "values": {
+        "pupilsPerCohort": 26.4,
+        "elementaryClasses": 6,
+        "schoolType": "C",
+        "dunamPerClass": 0.3,
+        "dunamRequired": 1.8,
+        "classSizeAssumed": 30
+      },
+      "message": "26.4 ילדים בשנתון, כ-6 כיתות יסודי, 1.80 דונם (טיפוס C)"
+    },
+    {
+      "id": "R04",
+      "status": "pass",
+      "values": {
+        "required": 2420,
+        "provided": 2600
+      },
+      "message": "נדרש 2420 מ\"ר שימושים ציבוריים, הוקצו 2600"
+    },
+    {
+      "id": "R05",
+      "status": "fail",
+      "values": {
+        "requiredM2": 2640,
+        "countedM2": 1310,
+        "hardCounted": 350,
+        "roofsCounted": 60
+      },
+      "message": "נדרש 2640 מ\"ר (2 לנפש), נספר 1310. תשתית ירוקה מתחת למינימום 2 מ\"ר לנפש"
+    },
+    {
+      "id": "R06",
+      "status": "info",
+      "values": {
+        "zone": "א",
+        "distance": 250,
+        "nationalStandardRelief": true
+      },
+      "message": "אזור א: זכאות להקלה מתקן עירוני לתקן ארצי"
+    },
+    {
+      "id": "R07",
+      "status": "pass",
+      "values": {
+        "percolationShare": 0.158,
+        "effectiveGreenShare": 0.208
+      },
+      "message": "חלחול 15.8% (נדרש 15%), מגונן אפקטיבי 20.8% (נדרש 20%, עד 5% מגגות)"
+    },
+    {
+      "id": "R11",
+      "status": "warn",
+      "values": {
+        "proposed": 4.8,
+        "base": 1.8,
+        "max": 5.2
+      },
+      "message": "מעל הבסיס 1.8, עד המרבי 5.2: מותנה בתנאי 4.1.5 (הקצאה לציבור, תרומה למרחב, שיקול דעת)"
+    }
+  ],
+  "T2": [
+    {
+      "id": "R01",
+      "status": "fail",
+      "values": {
+        "smallShare": 0.1,
+        "mediumShare": 0.05,
+        "restAvgArea": 135
+      },
+      "message": "קטנות 10.0% (נדרש 20%), עד 80 מ\"ר 5.0% (נדרש 10%), ממוצע יתרה 135 מ\"ר (עד 125)"
+    },
+    {
+      "id": "R02",
+      "status": "info",
+      "values": {
+        "householdSize": 5.5,
+        "population": 1100
+      },
+      "message": "200 יח\"ד כפול 5.5 = 1100 תושבים"
+    },
+    {
+      "id": "R03",
+      "status": "info",
+      "values": {
+        "pupilsPerCohort": 33,
+        "elementaryClasses": 7,
+        "schoolType": "C",
+        "dunamPerClass": 0.2,
+        "dunamRequired": 1.4,
+        "classSizeAssumed": 30
+      },
+      "message": "33.0 ילדים בשנתון, כ-7 כיתות יסודי, 1.40 דונם (טיפוס C)"
+    },
+    {
+      "id": "R04",
+      "status": "pass",
+      "values": {
+        "required": 1430,
+        "provided": 1430
+      },
+      "message": "נדרש 1430 מ\"ר שימושים ציבוריים, הוקצו 1430"
+    },
+    {
+      "id": "R05",
+      "status": "fail",
+      "values": {
+        "requiredM2": 3300,
+        "countedM2": 3160,
+        "hardCounted": 660,
+        "roofsCounted": 0
+      },
+      "message": "נדרש 3300 מ\"ר (3 לנפש), נספר 3160"
+    },
+    {
+      "id": "R06",
+      "status": "info",
+      "values": {
+        "zone": "ג",
+        "distance": 700,
+        "nationalStandardRelief": false
+      },
+      "message": "אזור ג"
+    },
+    {
+      "id": "R07",
+      "status": "pass",
+      "values": {
+        "percolationShare": 0.163,
+        "effectiveGreenShare": 0.212
+      },
+      "message": "חלחול 16.3% (נדרש 15%), מגונן אפקטיבי 21.3% (נדרש 20%, עד 5% מגגות)"
+    },
+    {
+      "id": "R11",
+      "status": "fail",
+      "values": {
+        "proposed": 3.4,
+        "base": 1.8,
+        "max": 3.2
+      },
+      "message": "חורג מהרח\"ק המרבי 3.2"
+    }
+  ],
+  "T3": [
+    {
+      "id": "R01",
+      "status": "pass",
+      "values": {
+        "smallShare": 0.208,
+        "mediumShare": 0.108,
+        "restAvgArea": 124
+      },
+      "message": "קטנות 20.8% (נדרש 20%), עד 80 מ\"ר 10.8% (נדרש 10%), ממוצע יתרה 124 מ\"ר (עד 125)"
+    },
+    {
+      "id": "R02",
+      "status": "info",
+      "values": {
+        "householdSize": 3.5,
+        "population": 4200
+      },
+      "message": "1200 יח\"ד כפול 3.5 = 4200 תושבים"
+    },
+    {
+      "id": "R03",
+      "status": "info",
+      "values": {
+        "pupilsPerCohort": 92.4,
+        "elementaryClasses": 19,
+        "schoolType": "B",
+        "dunamPerClass": 0.5,
+        "dunamRequired": 9.5,
+        "classSizeAssumed": 30
+      },
+      "message": "92.4 ילדים בשנתון, כ-19 כיתות יסודי, 9.50 דונם (טיפוס B)"
+    },
+    {
+      "id": "R04",
+      "status": "info",
+      "values": {},
+      "message": "חל על תכניות התחדשות עירונית בלבד"
+    },
+    {
+      "id": "R05",
+      "status": "pass",
+      "values": {
+        "requiredM2": 12600,
+        "countedM2": 13120,
+        "hardCounted": 2000,
+        "roofsCounted": 0
+      },
+      "message": "נדרש 12600 מ\"ר (3 לנפש), נספר 13120"
+    },
+    {
+      "id": "R06",
+      "status": "info",
+      "values": {
+        "zone": "ב",
+        "distance": 450,
+        "nationalStandardRelief": false
+      },
+      "message": "אזור ב"
+    },
+    {
+      "id": "R07",
+      "status": "pass",
+      "values": {
+        "percolationShare": 0.158,
+        "effectiveGreenShare": 0.208
+      },
+      "message": "חלחול 15.8% (נדרש 15%), מגונן אפקטיבי 20.8% (נדרש 20%, עד 5% מגגות)"
+    },
+    {
+      "id": "R11",
+      "status": "fail",
+      "values": {
+        "proposed": 3,
+        "base": 1.8,
+        "max": 2.6
+      },
+      "message": "חורג מהרח\"ק המרבי 2.6"
+    }
+  ],
+  "G61": {
+    "id": "G61",
+    "title": "חלק ההתחדשות בתוספת",
+    "status": "pass",
+    "values": {
+      "renewalUnits": 600,
+      "totalUnits": 1800,
+      "share": 0.333,
+      "target": 0.333
+    },
+    "message": "33% מהתוספת בהתחדשות (יעד כשליש)",
+    "source": "תכנית 603-0528026, סעיף 6.1",
+    "certainty": "plan-draft"
+  },
+  "G63_example": {
+    "id": "G63",
+    "title": "סף יעד אוכלוסייה למתחם",
+    "status": "pass",
+    "values": {
+      "existing": 70000,
+      "approved": 0,
+      "pipeline": 1320,
+      "projected": 71320,
+      "target": 88000,
+      "ratio": 0.81
+    },
+    "message": "צפי 71320 מול יעד 88000 (81%)",
+    "source": "תכנית 603-0528026, סעיף 6.3",
+    "certainty": "plan-draft"
+  }
+}
