@@ -20,6 +20,7 @@ Read first: `docs/SPEC.md`, `docs/RULES.md`, `data/districts.json`, `reference/r
 - Rules engine is pure TS in `src/lib/rules.ts`, ported from `reference/rules-engine.mjs`. `data/test_expected.json` must match exactly (unit test).
 - Access (updated 2026-10-16): public read for published plan data (mt_city, mt_districts, mt_map_features, mt_rules, mt_policy_register). Members only (mt_members) for plans, checks, decisions, snapshots. Write = editor/admin. Reason: Google provider is off in ASHDODMAP, and the map must be viewable.
 - Sign-in: Google button appears automatically when the provider is enabled (checked at runtime via `/auth/v1/settings`). Until then: email magic link, no password form.
+- The project's Site URL is localhost:3000 (shared project, do not change it), so the emailed link lands on a dead page. The sign-in panel has "הדבקת הקישור מהמייל": it accepts the email link (`verify?token=` then `verifyOtp`) or the dead-end address (`#access_token=` then `setSession`). After sign-in a banner shows "מחוברת", email and role.
 
 ## Stack
 - Vite + React + TypeScript + framer-motion. MapLibre GL for the map (no API key; OSM raster or a free vector style).
@@ -72,3 +73,4 @@ Final URL + one line on what was built. Update this file.
 - 2026-10-16: show the real Ashdod map under the markings, using a free API (done: OpenFreeMap, Esri imagery, CARTO).
 - 2026-10-16: all technical buttons go behind one button on the left of the top bar ("מערכת").
 - 2026-10-16: a place to upload documents of any type, with name and date ("מסמכים").
+- 2026-10-16: the emailed sign-in link did not open (it went to localhost:3000). Sign-in must actually work, and Anat must clearly see that she is connected. Saved in the skill.

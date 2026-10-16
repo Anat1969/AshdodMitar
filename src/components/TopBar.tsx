@@ -7,7 +7,10 @@ import { LINKS } from '../lib/supabase';
 interface BIPEvent extends Event { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }
 
 export default function TopBar() {
-  const { session, role, googleEnabled, emailEnabled, signInGoogle, sendLink, signOut } = useAuth();
+  const { session, role, ready, googleEnabled, emailEnabled, signInGoogle, sendLink, signInWithPastedLink, signOut, justSignedIn, dismissSignedIn } = useAuth();
+  const [pasted, setPasted] = useState('');
+  const [pasteMsg, setPasteMsg] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
   const loc = useLocation();
   const [copied, setCopied] = useState(false);
   const [install, setInstall] = useState<BIPEvent | null>(null);
@@ -25,6 +28,7 @@ export default function TopBar() {
     return () => { window.removeEventListener('beforeinstallprompt', h); window.removeEventListener('appinstalled', done); };
   }, []);
   useEffect(() => { setOpen(false); }, [loc.pathname]);
+  useEffect(() => { if (!justSignedIn) return; const t = setTimeout(dismissSignedIn, 9000); return () => clearTimeout(t); }, [justSignedIn, dismissSignedIn]);
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(window.location.href); } catch { /* clipboard blocked */ }
@@ -57,6 +61,16 @@ export default function TopBar() {
           </div>
         </div>
       </header>
+      <AnimatePresence>
+        {justSignedIn && session && ready && (
+          <motion.div className={`signed-banner ${role ? '' : 'warn'}`} role="status" data-testid="signed-banner" initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }}>
+            <span>{role ? 'מחוברת' : 'מחוברת, אבל החשבון לא רשום בצוות'}</span>
+            <span className="mono" dir="ltr">{session.user.email}</span>
+            {role && <span className="chip st-pass">הרשאה: {roleLabel}</span>}
+            <button type="button" className="btn small ghost" onClick={dismissSignedIn}>סגירה</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {open && (
           <motion.div id="sys-panel" className="drawer sys-panel" role="dialog" aria-label="מערכת" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
@@ -91,12 +105,23 @@ export default function TopBar() {
                       <div className="notice">כניסה עם Google עדיין לא הופעלה בפרויקט ה-Supabase של האפליקציה.</div>
                     )}
                     {emailEnabled !== false && (
-                      <form className="row-actions sys-login" onSubmit={async (e) => { e.preventDefault(); setMsg('שולח'); const err = await sendLink(email); setMsg(err ? `שגיאה: ${err}` : 'נשלח קישור כניסה לתיבת הדואר'); }}>
+                      <form className="row-actions sys-login" onSubmit={async (e) => { e.preventDefault(); setMsg('שולח'); const err = await sendLink(email); setSent(!err); setMsg(err ? `שגיאה: ${err}` : 'נשלח קישור כניסה לתיבת הדואר'); }}>
                         <input className="input" type="email" required dir="ltr" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="כתובת דואר" />
                         <button type="submit" className="btn primary">שליחת קישור כניסה</button>
                       </form>
                     )}
                     {msg && <div className="notice">{msg}</div>}
+                    <form className={`paste-login ${sent ? 'lit' : ''}`} onSubmit={async (e) => {
+                      e.preventDefault(); setPasteMsg('מתחבר');
+                      const err = await signInWithPastedLink(pasted);
+                      setPasteMsg(err); if (!err) { setPasted(''); setOpen(false); }
+                    }}>
+                      <label htmlFor="paste-link"><b>הדבקת הקישור מהמייל</b></label>
+                      <div className="ls">במייל מ-Supabase: לחיצה ימנית על Log In, "העתקת כתובת הקישור", והדבקה כאן. אם כבר לחצת והגעת לדף שלא נפתח, אפשר להעתיק את הכתובת של אותו דף ולהדביק אותה כאן.</div>
+                      <input id="paste-link" className="input" dir="ltr" placeholder="https://…" value={pasted} onChange={(e) => setPasted(e.target.value)} aria-label="קישור הכניסה מהמייל" />
+                      <div className="row-actions"><button type="submit" className="btn primary" disabled={!pasted.trim()}>כניסה עם הקישור</button></div>
+                      {pasteMsg && <div className="notice" role="status">{pasteMsg}</div>}
+                    </form>
                   </>
                 )}
               </section>
