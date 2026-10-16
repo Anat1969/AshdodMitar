@@ -3,7 +3,8 @@ import maplibregl, { type StyleSpecification } from 'maplibre-gl';
 // Free background maps, no API key.
 // streets: OpenFreeMap (OpenMapTiles vector, OSM data), labels switched to Hebrew names.
 // sat: Esri World Imagery raster (free display use with attribution).
-// Hebrew shaping: @mapbox/mapbox-gl-rtl-text 0.3.0, self-hosted in public/vendor.
+// Hebrew shaping: @mapbox/mapbox-gl-rtl-text 0.2.3 (the MapLibre-compatible build), self-hosted in public/vendor.
+// Do not use 0.3.0: it is built for mapbox-gl v3 and blocks MapLibre from finishing the style load (blank map).
 // plain: CARTO light raster (also the fallback when OpenFreeMap is unreachable).
 export type BaseKey = 'streets' | 'sat' | 'plain';
 export const BASEMAPS: { key: BaseKey; title: string; source: string }[] = [
@@ -18,7 +19,7 @@ export function ensureRtlPlugin() {
   if (new URLSearchParams(window.location.search).get('rtl') === '0') return;
   rtlRequested = true;
   try {
-    if (maplibregl.getRTLTextPluginStatus() === 'unavailable') void maplibregl.setRTLTextPlugin(new URL('/vendor/mapbox-gl-rtl-text.js', window.location.origin).href, true);
+    if (maplibregl.getRTLTextPluginStatus() === 'unavailable') void maplibregl.setRTLTextPlugin(new URL('/vendor/mapbox-gl-rtl-text-0.2.3.min.js', window.location.origin).href, true);
   } catch { /* labels fall back to unshaped text */ }
 }
 
