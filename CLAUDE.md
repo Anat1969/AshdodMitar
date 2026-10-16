@@ -62,6 +62,7 @@ Commit and push. If a work branch is required: PR, then merge to `main` immediat
 
 ## Delivery
 Final URL + one line on what was built. Update this file.
+- Production: https://ashdod-mitar-twin.vercel.app (Vercel project `ashdod-mitar-twin`, deploys from `main`).
 
 ## Corrections log
 (empty)
