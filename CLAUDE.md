@@ -44,7 +44,7 @@ Architectural, minimal, greys, depth (shadows, layers, gradients, subtle motion)
 Commit and push. If a work branch is required: PR, then merge to `main` immediately after green tests. Anat has given standing approval to merge.
 
 ## Map layers
-- Background maps, free and keyless, switchable in the map (`?base=`): `streets` OpenFreeMap positron vector with Hebrew names (default), `sat` Esri World Imagery, `plain` CARTO light (also the automatic fallback). Hebrew shaping: `public/vendor/mapbox-gl-rtl-text.js`. Code: `src/lib/basemaps.ts`. The overlay is re-added on every `style.load`.
+- Background maps, free and keyless, switchable in the map (`?base=`): `streets` OpenFreeMap positron vector with Hebrew names (default), `sat` Esri World Imagery, `plain` CARTO light (also the automatic fallback). Hebrew shaping: `public/vendor/mapbox-gl-rtl-text-0.2.3.min.js (0.2.3; 0.3.0 blanks the map)`. Code: `src/lib/basemaps.ts`. The overlay is re-added on every `style.load`.
 - City boundary: OSM. Quarters: 35 official polygons from the Ashdod municipal GIS (`gis.ashdod.muni.il/arcgis/rest/services/Map/MapServer/0`, outSR=4326; reach it from SQL `http()`), plus רובע ז from OSM. Certainty label `municipal` ("GIS עירוני").
 - District boundaries = union of official quarters. The quarter-to-district assignment is still an assumption (`mt_districts.quarters`), checked against the plan's district areas (1, 2, 4, 6 within 3%). District 8 = בית העלמין.
 - Labels sit at the largest-inscribed-circle centre (`label_pt`, `props.label`); compact labels when zoomed out.
@@ -57,6 +57,7 @@ Commit and push. If a work branch is required: PR, then merge to `main` immediat
 - Plan page step 5 "פרוגרמה" fills `mt_plans.program`; the "כתב כמויות" table compares provided vs required per topic.
 - Map: topic picker + "התקדמות ליעד" colouring; plan circles sized by what the plan adds in the chosen topic. `/about` explains input, computation and output.
 - Map diagnostics: `?debug=1` shows map errors; `?rtl=0` disables the Hebrew text plugin.
+- Verifying the live map: the container cannot reach tile servers. Use the Apify actor `apify/screenshot-url` on the production URL (viewportWidth ~800 keeps the PNG small enough to view).
 
 ## Documents
 - `/documents`: upload any file type (up to 50MB) with name, document date, optional district/plan and note. Table `mt_documents`, private storage bucket `mt-documents`, opened via 5-minute signed URLs. Read: members. Write/delete: editor/admin.
