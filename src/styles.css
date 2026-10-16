@@ -70,6 +70,12 @@ textarea.input { min-height: 70px; resize: vertical; }
 .sys-grid .btn { white-space: normal; }
 .sys-login .input { flex: 1 1 200px; width: auto; }
 
+/* sign-in */
+.paste-login { display: grid; gap: 8px; padding: 12px; border-radius: 12px; border: 1px solid var(--line-2); background: var(--paper); }
+.paste-login.lit { border-color: var(--ink-3); background: #fff; box-shadow: var(--shadow-1); }
+.signed-banner { position: fixed; top: calc(var(--top) + 10px); left: 0; right: 0; margin-inline: auto; width: fit-content; z-index: 60; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 32px); padding: 10px 16px; border-radius: 14px; background: linear-gradient(180deg, #ffffff, #eef5f0); border: 1px solid #b9d3c3; box-shadow: var(--shadow-2); font-weight: 500; }
+.signed-banner.warn { background: linear-gradient(180deg, #ffffff, #f6ecd9); border-color: #e2c993; }
+
 /* documents */
 .dropzone { position: relative; display: grid; justify-items: center; gap: 4px; padding: 26px 16px; border-radius: 14px; border: 1.5px dashed #aab0b8; background: linear-gradient(180deg, #fafbfc, #f1f3f5); cursor: pointer; text-align: center; transition: border-color 0.15s, background 0.15s; }
 .dropzone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

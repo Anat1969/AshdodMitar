@@ -6,9 +6,15 @@ const REF = 'cbhexpybdggwzyakgagd';
 const SHOTS = new URL('./shots/', import.meta.url).pathname;
 fs.mkdirSync(SHOTS, { recursive: true });
 
+const FAKE_USER = { id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email: 'shtanat5@gmail.com', app_metadata: { provider: 'email' }, user_metadata: {}, created_at: '2026-10-16T00:00:00Z' };
+function fakeJwt(tag = 'ok') {
+  const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: FAKE_USER.id, email: FAKE_USER.email, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600, tag })}.${tag}`;
+}
+
 interface Captured { method: string; table: string; body: unknown; url: string }
 
-async function mock(page: Page, opts: { admin: boolean }) {
+async function mock(page: Page, opts: { admin: boolean; noSession?: boolean }) {
   const writes: Captured[] = [];
   const reads: string[] = [];
   await page.route('**/*', async (route) => {
@@ -25,6 +31,17 @@ async function mock(page: Page, opts: { admin: boolean }) {
       if (url.pathname === '/auth/v1/settings') return route.fulfill({ json: { external: { google: false, email: true } } });
       if (url.pathname.startsWith('/auth/v1/otp')) { writes.push({ method: 'POST', table: 'auth/otp', body: req.postDataJSON(), url: req.url() }); return route.fulfill({ json: {} }); }
       if (url.pathname.startsWith('/auth/v1/logout')) return route.fulfill({ status: 204, body: '' });
+      if (url.pathname === '/auth/v1/user') {
+        const auth = req.headers()['authorization'] ?? '';
+        if (auth.includes('expired')) return route.fulfill({ status: 401, json: { msg: 'invalid JWT' } });
+        return route.fulfill({ json: FAKE_USER });
+      }
+      if (url.pathname === '/auth/v1/verify') {
+        writes.push({ method: 'POST', table: 'auth/verify', body: req.postDataJSON(), url: req.url() });
+        const body = req.postDataJSON() as { token_hash?: string };
+        if (body.token_hash === 'used') return route.fulfill({ status: 403, json: { error_code: 'otp_expired', msg: 'Email link is invalid or has expired' } });
+        return route.fulfill({ json: { access_token: fakeJwt(), refresh_token: 'r2', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: FAKE_USER } });
+      }
       const m = url.pathname.match(/\/rest\/v1\/(\w+)/);
       if (m) {
         const table = m[1];
@@ -49,7 +66,7 @@ async function mock(page: Page, opts: { admin: boolean }) {
     if (url.hostname.includes('cartocdn') || url.hostname.includes('fonts.') || url.hostname.includes('openfreemap') || url.hostname.includes('arcgisonline')) return route.abort();
     return route.abort();
   });
-  if (opts.admin) {
+  if (opts.admin && !opts.noSession) {
     await page.addInitScript((ref) => {
       const b64 = (o: object) => btoa(JSON.stringify(o)).replace(/=+$/, '');
       const exp = Math.floor(Date.now() / 1000) + 3600 * 24;
@@ -364,4 +381,40 @@ test('documents: anonymous sees members-only notice', async ({ page }) => {
   await page.goto('/documents');
   await expect(page.getByText('ספריית המסמכים פתוחה לחברי הצוות בלבד')).toBeVisible();
   await expect(page.getByLabel('בחירת קובץ')).toHaveCount(0);
+});
+
+test('sign-in by pasting the emailed link or the dead-end address, then a clear connected banner', async ({ page }) => {
+  // reads of mt_members return admin once a session exists
+  const { writes } = await mock(page, { admin: true, noSession: true });
+  await page.goto('/');
+  await page.locator('.sys-btn').click();
+  await page.getByLabel('כתובת דואר').fill('shtanat5@gmail.com');
+  await page.getByRole('button', { name: 'שליחת קישור כניסה' }).click();
+  await expect(page.locator('.paste-login.lit')).toBeVisible();
+  // a used link shows a clear message
+  await page.getByLabel('קישור הכניסה מהמייל').fill('https://cbhexpybdggwzyakgagd.supabase.co/auth/v1/verify?token=used&type=magiclink&redirect_to=http://localhost:3000');
+  await page.getByRole('button', { name: 'כניסה עם הקישור' }).click();
+  await expect(page.locator('.paste-login .notice')).toContainText('פג תוקף או כבר נוצל');
+  // garbage
+  await page.getByLabel('קישור הכניסה מהמייל').fill('hello');
+  await page.getByRole('button', { name: 'כניסה עם הקישור' }).click();
+  await expect(page.locator('.paste-login .notice')).toContainText('לא נראה כמו קישור');
+  // the address the link landed on (localhost:3000/#access_token=…)
+  await page.getByLabel('קישור הכניסה מהמייל').fill(`http://localhost:3000/#access_token=${fakeJwt()}&expires_at=9999999999&expires_in=3600&refresh_token=abc&token_type=bearer&type=magiclink`);
+  await page.getByRole('button', { name: 'כניסה עם הקישור' }).click();
+  await expect(page.getByTestId('signed-banner')).toContainText('מחוברת');
+  await expect(page.getByTestId('signed-banner')).toContainText('shtanat5@gmail.com');
+  await expect(page.getByTestId('signed-banner')).toContainText('הרשאה: מנהלת');
+  await expect(page.locator('.sys-btn')).toContainText('מנהלת');
+  await page.screenshot({ path: SHOTS + 'signed-in.png' });
+  await page.getByTestId('signed-banner').getByRole('button', { name: 'סגירה' }).click();
+  await expect(page.getByTestId('signed-banner')).toHaveCount(0);
+  // sign out, then the original email link (verify?token=…)
+  await page.locator('.sys-btn').click();
+  await page.getByRole('button', { name: 'יציאה' }).click();
+  await page.locator('.sys-btn').click();
+  await page.getByLabel('קישור הכניסה מהמייל').fill('https://cbhexpybdggwzyakgagd.supabase.co/auth/v1/verify?token=pkce_abc123&type=magiclink&redirect_to=http://localhost:3000');
+  await page.getByRole('button', { name: 'כניסה עם הקישור' }).click();
+  await expect(page.getByTestId('signed-banner')).toContainText('הרשאה: מנהלת');
+  expect(writes.filter((w) => w.table === 'auth/verify').map((w) => (w.body as { token_hash: string }).token_hash)).toContain('pkce_abc123');
 });
