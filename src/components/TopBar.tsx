@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../lib/auth';
 import { LINKS } from '../lib/supabase';
@@ -8,18 +8,23 @@ interface BIPEvent extends Event { prompt: () => Promise<void>; userChoice: Prom
 
 export default function TopBar() {
   const { session, role, googleEnabled, emailEnabled, signInGoogle, sendLink, signOut } = useAuth();
+  const loc = useLocation();
   const [copied, setCopied] = useState(false);
   const [install, setInstall] = useState<BIPEvent | null>(null);
-  const [drawer, setDrawer] = useState(false);
+  const [installed, setInstalled] = useState(false);
+  const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const h = (e: Event) => { e.preventDefault(); setInstall(e as BIPEvent); };
+    const done = () => { setInstall(null); setInstalled(true); };
     window.addEventListener('beforeinstallprompt', h);
-    window.addEventListener('appinstalled', () => setInstall(null));
-    return () => window.removeEventListener('beforeinstallprompt', h);
+    window.addEventListener('appinstalled', done);
+    if (window.matchMedia?.('(display-mode: standalone)').matches) setInstalled(true);
+    return () => { window.removeEventListener('beforeinstallprompt', h); window.removeEventListener('appinstalled', done); };
   }, []);
+  useEffect(() => { setOpen(false); }, [loc.pathname]);
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(window.location.href); } catch { /* clipboard blocked */ }
@@ -40,51 +45,63 @@ export default function TopBar() {
           <nav className="tb-nav" aria-label="ניווט ראשי">
             <NavLink to="/map">מפה ושכבות</NavLink>
             <NavLink to="/plan/new">בדיקת תכנית</NavLink>
+            <NavLink to="/documents">מסמכים</NavLink>
             <NavLink to="/rules">כללים</NavLink>
             <NavLink to="/register">מרשם מדיניות</NavLink>
             <NavLink to={`/report/${new Date().getFullYear()}`}>דוח 6.2</NavLink>
           </nav>
           <div className="tb-actions">
-            <button type="button" className="btn small" onClick={copy}>{copied ? 'הקישור הועתק' : 'העתקת קישור'}</button>
-            <a className="btn small" href={LINKS.devChat} target="_blank" rel="noreferrer">שיחת הפיתוח</a>
-            <a className="btn small" href={LINKS.research} target="_blank" rel="noreferrer">פרויקט המחקר</a>
-            {install && <button type="button" className="btn small primary" onClick={async () => { await install.prompt(); setInstall(null); }}>התקנת האפליקציה</button>}
-            <button type="button" className={`btn small ${session ? '' : 'primary'}`} onClick={() => setDrawer(!drawer)} aria-expanded={drawer}>
-              {session ? roleLabel : 'כניסה'}
+            <button type="button" className={`btn small sys-btn ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="sys-panel">
+              מערכת{roleLabel ? <span className="sys-role">{roleLabel}</span> : null}
             </button>
           </div>
         </div>
       </header>
       <AnimatePresence>
-        {drawer && (
-          <motion.div className="drawer" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-            {session ? (
-              <div className="drawer-body">
-                <div><span className="mono">{session.user.email}</span></div>
-                <div>{role ? `הרשאה: ${roleLabel}` : 'החשבון אינו רשום בצוות (mt_members). אפשר לצפות במפה, בכללים ובמרשם. תכניות והחלטות פתוחות לחברי צוות בלבד.'}</div>
-                <div className="row-actions">
-                  <button type="button" className="btn" onClick={async () => { await signOut(); setDrawer(false); }}>יציאה</button>
-                  <button type="button" className="btn ghost" onClick={() => setDrawer(false)}>סגירה</button>
+        {open && (
+          <motion.div id="sys-panel" className="drawer sys-panel" role="dialog" aria-label="מערכת" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="drawer-body">
+              <section className="sys-group">
+                <h3 className="sys-h">שיתוף ופיתוח</h3>
+                <div className="sys-grid">
+                  <button type="button" className="btn" onClick={copy}>{copied ? 'הקישור הועתק' : 'העתקת קישור'}</button>
+                  <a className="btn" href={LINKS.devChat} target="_blank" rel="noreferrer">שיחת הפיתוח</a>
+                  <a className="btn" href={LINKS.research} target="_blank" rel="noreferrer">פרויקט המחקר</a>
+                  {install
+                    ? <button type="button" className="btn primary" onClick={async () => { await install.prompt(); setInstall(null); }}>התקנת האפליקציה</button>
+                    : <button type="button" className="btn" disabled title={installed ? 'האפליקציה מותקנת' : 'Chrome יציע התקנה כשהדף עומד בתנאים'}>{installed ? 'האפליקציה מותקנת' : 'התקנת האפליקציה'}</button>}
                 </div>
-              </div>
-            ) : (
-              <div className="drawer-body">
-                <p>המפה, הכללים ומרשם המדיניות פתוחים לצפייה. תכניות, בדיקות שמורות והחלטות פתוחות לחברי הצוות בלבד.</p>
-                {googleEnabled ? (
-                  <button type="button" className="btn primary" onClick={signInGoogle}>כניסה עם Google</button>
+                <div className="ls">העתקת קישור שומרת גם את המצב: מתחם, שכבות, צביעה ורקע.</div>
+              </section>
+
+              <section className="sys-group">
+                <h3 className="sys-h">חשבון</h3>
+                {session ? (
+                  <>
+                    <div className="mono">{session.user.email}</div>
+                    <div>{role ? `הרשאה: ${roleLabel}` : 'החשבון אינו רשום בצוות (mt_members). אפשר לצפות במפה, בכללים ובמרשם. תכניות, מסמכים והחלטות פתוחים לחברי צוות בלבד.'}</div>
+                    <div className="row-actions"><button type="button" className="btn" onClick={async () => { await signOut(); setOpen(false); }}>יציאה</button></div>
+                  </>
                 ) : (
-                  <div className="notice">כניסה עם Google עדיין לא הופעלה בפרויקט ה-Supabase של האפליקציה.</div>
+                  <>
+                    <p>המפה, הכללים ומרשם המדיניות פתוחים לצפייה. תכניות, מסמכים, בדיקות שמורות והחלטות פתוחים לחברי הצוות בלבד.</p>
+                    {googleEnabled ? (
+                      <button type="button" className="btn primary" onClick={signInGoogle}>כניסה עם Google</button>
+                    ) : (
+                      <div className="notice">כניסה עם Google עדיין לא הופעלה בפרויקט ה-Supabase של האפליקציה.</div>
+                    )}
+                    {emailEnabled !== false && (
+                      <form className="row-actions sys-login" onSubmit={async (e) => { e.preventDefault(); setMsg('שולח'); const err = await sendLink(email); setMsg(err ? `שגיאה: ${err}` : 'נשלח קישור כניסה לתיבת הדואר'); }}>
+                        <input className="input" type="email" required dir="ltr" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="כתובת דואר" />
+                        <button type="submit" className="btn primary">שליחת קישור כניסה</button>
+                      </form>
+                    )}
+                    {msg && <div className="notice">{msg}</div>}
+                  </>
                 )}
-                {emailEnabled !== false && (
-                  <form className="row-actions" onSubmit={async (e) => { e.preventDefault(); setMsg('שולח'); const err = await sendLink(email); setMsg(err ? `שגיאה: ${err}` : 'נשלח קישור כניסה לתיבת הדואר'); }}>
-                    <input className="input" type="email" required dir="ltr" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="כתובת דואר" />
-                    <button type="submit" className="btn primary">שליחת קישור כניסה</button>
-                  </form>
-                )}
-                {msg && <div className="notice">{msg}</div>}
-                <button type="button" className="btn ghost" onClick={() => setDrawer(false)}>סגירה</button>
-              </div>
-            )}
+              </section>
+              <div className="row-actions"><button type="button" className="btn ghost" onClick={() => setOpen(false)}>סגירה</button></div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

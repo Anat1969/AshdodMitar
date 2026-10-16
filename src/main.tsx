@@ -11,6 +11,7 @@ import PlanPage from './pages/Plan';
 import RulesPage from './pages/Rules';
 import RegisterPage from './pages/Register';
 import ReportPage from './pages/Report';
+import DocumentsPage from './pages/Documents';
 import './styles.css';
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
         <Route path="/map" element={<MapPage />} />
         <Route path="/district/:id" element={<DistrictPage />} />
         <Route path="/plan/:id" element={<PlanPage />} />
+        <Route path="/documents" element={<DocumentsPage />} />
         <Route path="/rules" element={<RulesPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/report/:year" element={<ReportPage />} />

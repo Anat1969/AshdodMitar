@@ -83,3 +83,19 @@ grant usage, select on sequence mt_policy_register_id_seq to authenticated;
 --   quarter_points: public.quarters.center (OSM).
 --   quarter_cells: ST_VoronoiPolygons of quarter centres, clipped to the city boundary.
 --   mt_districts.geom: ST_Union of the cells of mt_districts.quarters.
+
+-- Documents library (added 2026-10-16)
+create table mt_documents (
+  id uuid primary key default gen_random_uuid(),
+  name text not null, doc_date date, file_path text not null, file_name text, mime text, size_bytes bigint,
+  district_id int references mt_districts(id), plan_id uuid references mt_plans(id) on delete set null,
+  note text, uploaded_by text, created_at timestamptz default now());
+alter table mt_documents enable row level security;
+create policy mt_documents_read on mt_documents for select to authenticated using (mt_role() is not null);
+create policy mt_documents_write on mt_documents for all to authenticated using (mt_role() in ('editor','admin')) with check (mt_role() in ('editor','admin'));
+grant select, insert, update, delete on mt_documents to authenticated;
+insert into storage.buckets (id, name, public, file_size_limit) values ('mt-documents','mt-documents', false, 52428800) on conflict (id) do nothing;
+create policy mt_documents_obj_read on storage.objects for select to authenticated using (bucket_id = 'mt-documents' and public.mt_role() is not null);
+create policy mt_documents_obj_insert on storage.objects for insert to authenticated with check (bucket_id = 'mt-documents' and public.mt_role() in ('editor','admin'));
+create policy mt_documents_obj_update on storage.objects for update to authenticated using (bucket_id = 'mt-documents' and public.mt_role() in ('editor','admin'));
+create policy mt_documents_obj_remove on storage.objects for delete to authenticated using (bucket_id = 'mt-documents' and public.mt_role() in ('editor','admin'));
