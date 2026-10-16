@@ -45,10 +45,18 @@ Commit and push. If a work branch is required: PR, then merge to `main` immediat
 
 ## Map layers
 - Background maps, free and keyless, switchable in the map (`?base=`): `streets` OpenFreeMap positron vector with Hebrew names (default), `sat` Esri World Imagery, `plain` CARTO light (also the automatic fallback). Hebrew shaping: `public/vendor/mapbox-gl-rtl-text.js`. Code: `src/lib/basemaps.ts`. The overlay is re-added on every `style.load`.
-- City boundary: OSM (real). Quarter centres: OSM (real). Quarter cells and district boundaries: schematic, labeled "הנחת עבודה". The quarter-to-district assignment is an assumption and lives in `mt_districts.quarters`.
-- District 8 (פארק לכיש מזרח) has no geometry: shown as "גבול חסר".
+- City boundary: OSM. Quarters: 35 official polygons from the Ashdod municipal GIS (`gis.ashdod.muni.il/arcgis/rest/services/Map/MapServer/0`, outSR=4326; reach it from SQL `http()`), plus רובע ז from OSM. Certainty label `municipal` ("GIS עירוני").
+- District boundaries = union of official quarters. The quarter-to-district assignment is still an assumption (`mt_districts.quarters`), checked against the plan's district areas (1, 2, 4, 6 within 3%). District 8 = בית העלמין.
+- Labels sit at the largest-inscribed-circle centre (`label_pt`, `props.label`); compact labels when zoomed out.
 - Missing layers shown disabled with "חסר": mass-transit axis and parking zones, official district boundaries (נספח מתחמים).
 - When the official GeoJSON arrives: write it to `mt_districts.geom`, set `geom_certainty='plan-draft'`, and update the layer label in `LAYERS`.
+
+## Topics and bill of quantities
+- `src/lib/topics.ts` (unit-tested): 8 topics (housing, elementary education, kindergartens, open space, public buildings, commerce, offices/employment, roads). Per district: existing, planned (sum of plan programs), target, gap, progress. Targets: housing = plan's added units; education/kindergarten = target population demand (class size 30 = assumption); open space = 3 m² per person; employment = plan's employment area; public, commerce, roads = "חסר".
+- Existing: education from `mt_existing` (municipal GIS, 875 institutions, no personal fields); parks, buildings, shops, public buildings, roads drawn from OpenFreeMap vector tiles (`ofm` source). Counts per district for those are still "חסר" until an OSM import (Overpass was overloaded).
+- Plan page step 5 "פרוגרמה" fills `mt_plans.program`; the "כתב כמויות" table compares provided vs required per topic.
+- Map: topic picker + "התקדמות ליעד" colouring; plan circles sized by what the plan adds in the chosen topic. `/about` explains input, computation and output.
+- Map diagnostics: `?debug=1` shows map errors; `?rtl=0` disables the Hebrew text plugin.
 
 ## Documents
 - `/documents`: upload any file type (up to 50MB) with name, document date, optional district/plan and note. Table `mt_documents`, private storage bucket `mt-documents`, opened via 5-minute signed URLs. Read: members. Write/delete: editor/admin.
@@ -73,4 +81,6 @@ Final URL + one line on what was built. Update this file.
 - 2026-10-16: show the real Ashdod map under the markings, using a free API (done: OpenFreeMap, Esri imagery, CARTO).
 - 2026-10-16: all technical buttons go behind one button on the left of the top bar ("מערכת").
 - 2026-10-16: a place to upload documents of any type, with name and date ("מסמכים").
+- 2026-10-16: the markings did not line up with the map. Fixed with official municipal quarter polygons and a background fallback.
+- 2026-10-16: explain input and output (`/about`, plan page note). Goal: per topic show existing vs planned, maps update toward the target, every plan decomposes into a bill of quantities.
 - 2026-10-16: the emailed sign-in link did not open (it went to localhost:3000). Sign-in must actually work, and Anat must clearly see that she is connected. Saved in the skill.

@@ -6,11 +6,11 @@ import { supabase } from '../lib/supabase';
 import { fmt, PLAN_STATUS_LABEL, toInput } from '../lib/data';
 import { renewalBalance } from '../lib/rules';
 import MapView from '../components/MapView';
-import { CertaintyChip, Gauge, Loading, Page, RuleCard } from '../components/ui';
+import { CertaintyChip, Gauge, Loading, Page, RuleCard, TopicsTable } from '../components/ui';
 
 export default function DistrictPage() {
   const { id } = useParams();
-  const { districts, plans, gates, loading, error, refresh } = useStore();
+  const { districts, plans, gates, loading, error, refresh, matrix } = useStore();
   const { isMember, canWrite } = useAuth();
   const [edit, setEdit] = useState(false);
   const [pop, setPop] = useState('');
@@ -55,9 +55,16 @@ export default function DistrictPage() {
         <section className="card">
           <div className="card-head"><h2>מיקום</h2><CertaintyChip certainty="assumption" /></div>
           <MapView focus={d.id} />
-          <div className="ls">{d.geom ? `גבול סכמטי לפי רבעים: ${d.quarters.length} תאים. לא מנספח המתחמים.` : 'גבול המתחם חסר.'}</div>
+          <div className="ls">{d.geom ? `איחוד ${d.quarters.length} רובעים רשמיים (GIS עירוני) לפי שיוך משוער. שטח ממופה ${fmt((d.mapped_area_m2 ?? 0) / 1000)} דונם מול ${fmt((d.total_area_m2 ?? 0) / 1000)} דונם בתכנית (${d.total_area_m2 ? Math.round(100 * (d.mapped_area_m2 ?? 0) / d.total_area_m2) : 0}%).` : 'גבול המתחם חסר.'}</div>
         </section>
       </div>
+
+      {matrix[d.id] && (
+        <section className="card">
+          <div className="card-head"><h2>נושאים: קיים, מתוכנן ויעד</h2><Link className="btn small" to={`/map?d=${d.id}&theme=progress`}>במפה</Link></div>
+          <TopicsTable cells={matrix[d.id]} isMember={isMember} testId="district-topics" />
+        </section>
+      )}
 
       <div className="two-col">
         <section className="card">

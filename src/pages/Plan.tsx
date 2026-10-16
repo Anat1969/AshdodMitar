@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { fmt, PLAN_STATUS_LABEL, toInput, type Plan } from '../lib/data';
 import { checkPlan, districtGate } from '../lib/rules';
 import { CertaintyChip, Loading, Page, RuleCard, StatusChip } from '../components/ui';
+import { billOfQuantities, BOQ_LABEL, type Program } from '../lib/topics';
 
 type Form = Omit<Plan, 'id' | 'location' | 'is_example' | 'data_certainty'> & { id?: string };
 const blank = (district: number | null): Form => ({
@@ -13,9 +14,10 @@ const blank = (district: number | null): Form => ({
   units_added: 0, mix: { small: 0, medium: 0, rest: 0, restAvgArea: 0 }, added_above_ground_m2: null, public_built_m2: null,
   intensive: false, yard: { green: 0, hard: 0, roofs: 0, schoolyards: 0 }, distance_mass_transit_m: null, lot_area_m2: null,
   percolation_m2: null, effective_green_m2: null, green_roof_m2: null, far: null, rahak_row: null, note: null,
+  program: {},
 });
 
-const STEPS = ['זיהוי', 'יח"ד ותמהיל', 'שטחים וסף-בית', 'מיקום ורח"ק'] as const;
+const STEPS = ['זיהוי', 'יח"ד ותמהיל', 'שטחים וסף-בית', 'מיקום ורח"ק', 'פרוגרמה'] as const;
 
 export default function PlanPage() {
   const { id } = useParams();
@@ -37,6 +39,7 @@ export default function PlanPage() {
   const input = useMemo(() => toInput({ ...(f as Plan), id: f.id ?? 'draft', location: null, is_example: false, data_certainty: 'reported' }), [f]);
   const mixFilled = f.mix && f.mix.small + f.mix.medium + f.mix.rest > 0;
   const results = useMemo(() => checkPlan({ ...input, mix: mixFilled ? input.mix : null }, district), [input, district, mixFilled]);
+  const boq = useMemo(() => billOfQuantities({ ...input, mix: mixFilled ? input.mix : null }), [input, mixFilled]);
 
   const impact = useMemo(() => {
     if (!district) return null;
@@ -83,6 +86,7 @@ export default function PlanPage() {
         {canWrite && <button type="button" className="btn primary" onClick={save}>{f.id ? 'שמירה והרצת בדיקה' : 'שמירת תכנית'}</button>}
         {!canWrite && <span className="ls">בדיקה בלבד, בלי שמירה. שמירה לעורכים אחרי כניסה.</span>}
       </>}>
+      <div className="io-note"><b>קלט:</b> נתוני התכנית בחמישה שלבים. <b>פלט:</b> כתב כמויות, כרטיס לכל כלל עם מקור וודאות, והשפעה על המתחם. <Link to="/about">איך זה עובד</Link></div>
       {existing?.is_example && <div className="notice">תכנית דוגמה בדויה לבדיקת המנוע. לא תכנית אמיתית.</div>}
       {msg && <div className="notice" role="status">{msg}</div>}
       <div className="plan-layout">
@@ -136,6 +140,15 @@ export default function PlanPage() {
               </select></label>
             </div>
           )}
+          {step === 4 && (
+            <div className="form-grid">
+              <div className="wide ls">מה התכנית מספקת. כל שורה נבדקת מול מה שהתכנית עצמה מייצרת, בכתב הכמויות שמימין.</div>
+              {([['classrooms', 'כיתות יסודי'], ['kindergartens', 'כיתות גן'], ['education_dunam', 'קרקע לחינוך, דונם'], ['open_space_m2', 'שצ"פ, מ"ר'], ['commerce_m2', 'מסחר, מ"ר'], ['office_m2', 'משרדים ותעסוקה, מ"ר'], ['roads_m', 'כבישים, מטר אורך']] as [keyof Program, string][]).map(([k, label]) => (
+                <label key={k}>{label}<input className="input mono" type="number" step="any" value={(f.program?.[k] as number | null | undefined) ?? ''} onChange={(e) => set('program', { ...(f.program ?? {}), [k]: e.target.value === '' ? null : Number(e.target.value) })} /></label>
+              ))}
+              {numField('שטחי ציבור בנויים, מ״ר', 'public_built_m2')}
+            </div>
+          )}
           <div className="row-actions step-nav">
             <button type="button" className="btn" disabled={step === 0} onClick={() => setStep(step - 1)}>הקודם</button>
             <button type="button" className="btn" disabled={step === STEPS.length - 1} onClick={() => setStep(step + 1)}>הבא</button>
@@ -143,6 +156,24 @@ export default function PlanPage() {
         </section>
 
         <section className="results">
+          <div className="card boq" data-testid="boq">
+            <div className="card-head"><h2>כתב כמויות</h2><span className="ls">מה התכנית מספקת מול מה שהיא מייצרת</span></div>
+            <div className="table-wrap">
+              <table className="table">
+                <thead><tr><th>נושא</th><th>מוצע</th><th>נדרש</th><th>מאזן</th><th>מצב</th><th>בסיס</th></tr></thead>
+                <tbody>{boq.map((r) => (
+                  <tr key={r.key} data-boq={r.key}>
+                    <td><b>{r.title}</b> <span className="ls">{r.unit}</span></td>
+                    <td className="mono">{fmt(r.provided, 2)}</td>
+                    <td className="mono">{r.required == null ? 'אין יעד' : fmt(r.required, 2)}</td>
+                    <td className="mono">{r.balance == null ? '' : (r.balance > 0 ? '+' : '') + fmt(r.balance, 2)}</td>
+                    <td><span className={`chip st-${r.status === 'pass' ? 'pass' : r.status === 'fail' ? 'fail' : r.status === 'missing' ? 'missing' : 'info'}`}>{BOQ_LABEL[r.status]}</span></td>
+                    <td className="ls">{r.basis} <CertaintyChip certainty={r.certainty} /></td>
+                  </tr>))}
+                </tbody>
+              </table>
+            </div>
+          </div>
           <div className="section-head"><h2>תוצאות הבדיקה</h2><span className="ls">מתעדכן תוך כדי הקלדה</span></div>
           <div className="rule-grid">{results.map((r, i) => <RuleCard key={r.id} r={r} i={i} />)}</div>
           {impact && (

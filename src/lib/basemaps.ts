@@ -15,6 +15,7 @@ export const BASEMAPS: { key: BaseKey; title: string; source: string }[] = [
 let rtlRequested = false;
 export function ensureRtlPlugin() {
   if (rtlRequested) return;
+  if (new URLSearchParams(window.location.search).get('rtl') === '0') return;
   rtlRequested = true;
   try {
     if (maplibregl.getRTLTextPluginStatus() === 'unavailable') void maplibregl.setRTLTextPlugin(new URL('/vendor/mapbox-gl-rtl-text.js', window.location.origin).href, true);

@@ -242,5 +242,5 @@ export function checkPlan(p: PlanInput, district?: DistrictInput | null): RuleRe
 
 export const STATUS_LABEL: Record<Status, string> = { pass: 'עומד', fail: 'לא עומד', warn: 'מותנה', info: 'נגזר', missing: 'חסר' };
 export const CERTAINTY_LABEL: Record<string, string> = {
-  statutory: 'חוק / תקנה', 'plan-draft': 'תכנית בהכנה', 'policy-draft': 'מדיניות טיוטה', assumption: 'הנחת עבודה', missing: 'חסר', osm: 'OpenStreetMap',
+  statutory: 'חוק / תקנה', 'plan-draft': 'תכנית בהכנה', 'policy-draft': 'מדיניות טיוטה', assumption: 'הנחת עבודה', missing: 'חסר', osm: 'OpenStreetMap', municipal: 'GIS עירוני',
 };

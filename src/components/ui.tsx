@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 import { CERTAINTY_LABEL, STATUS_LABEL, type RuleResult, type Status } from '../lib/rules';
+import { TOPICS, type TopicCell, type TopicKey } from '../lib/topics';
 
 export const GATE_LABEL: Record<Status, string> = { pass: 'תקין', warn: 'קרוב לסף', fail: 'חוצה סף', info: 'מידע', missing: 'חסר' };
 
@@ -68,6 +69,32 @@ export function Gauge({ label, value, target, marks, note }: { label: string; va
         ))}
       </div>
       {note && <div className="gauge-note">{note}</div>}
+    </div>
+  );
+}
+
+export function TopicsTable({ cells, isMember, testId }: { cells: Record<TopicKey, TopicCell>; isMember: boolean; testId?: string }) {
+  const n = (v: number | null | undefined) => (v == null ? 'חסר' : v.toLocaleString('he-IL', { maximumFractionDigits: 0 }));
+  return (
+    <div className="table-wrap">
+      <table className="table topics" data-testid={testId}>
+        <thead><tr><th>נושא</th><th>קיים</th><th>מתוכנן</th><th>יעד</th><th>פער</th><th>התקדמות</th><th>ודאות היעד</th></tr></thead>
+        <tbody>{TOPICS.map((t) => {
+          const c = cells[t.key];
+          const p = c.progress;
+          return (
+            <tr key={t.key} data-topic={t.key}>
+              <td><b>{t.title}</b> <span className="ls">{t.unit}</span>{c.existingSource && <div className="ls">{c.existingSource}</div>}</td>
+              <td className="mono">{n(c.existing)}</td>
+              <td className="mono">{isMember ? n(c.planned) : 'לצוות'}</td>
+              <td className="mono">{n(c.target)}</td>
+              <td className="mono">{n(c.gap)}</td>
+              <td><div className="bar" aria-label={p == null ? 'חסר' : `${Math.round(p * 100)}%`}><span style={{ width: `${Math.min(100, (p ?? 0) * 100)}%` }} className={p != null && p >= 1 ? 'done' : ''} /></div><span className="mono ls">{p == null ? 'חסר' : `${Math.round(p * 100)}%`}</span></td>
+              <td><CertaintyChip certainty={c.certainty} /></td>
+            </tr>
+          );
+        })}</tbody>
+      </table>
     </div>
   );
 }

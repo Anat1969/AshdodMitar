@@ -97,7 +97,9 @@ test('anonymous: home, map layers, district card, no members data', async ({ pag
   await expect(page.getByRole('heading', { name: 'כל תכנית היא דלתא בתאום העיר' })).toBeVisible();
   await expect(page.locator('[data-testid^="district-card-"]')).toHaveCount(9);
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
-  await expect(page.locator('.map-label')).toHaveCount(8);
+  await expect(page.locator('.map-label')).toHaveCount(9);
+  await expect(page.locator('.map-label[data-district="8"]')).toBeVisible();
+  await expect(page.getByTestId('city-topics').locator('tr[data-topic="education"]')).toContainText('1,');
   expect(reads).toContain('mt_districts');
   expect(reads).not.toContain('mt_plans');
   // disclaimer
@@ -123,7 +125,7 @@ test('map page: every layer toggle, themes, district selection, copy link', asyn
   await page.waitForTimeout(500);
   if (!(await page.locator('.layer-panel').isVisible())) await page.getByRole('button', { name: 'שכבות' }).click();
   await expect(page.locator('.layer-panel')).toBeVisible();
-  for (const key of ['city', 'districts', 'labels', 'cells', 'qpoints', 'plans', 'extrude']) {
+  for (const key of ['city', 'quarters', 'districts', 'labels', 'existing', 'plans', 'extrude']) {
     const box = page.locator(`input[data-layer="${key}"]`);
     const before = await box.isChecked();
     await box.click();
@@ -132,9 +134,9 @@ test('map page: every layer toggle, themes, district selection, copy link', asyn
     expect(layers.split(',').includes(key)).toBe(!before);
   }
   // restore richer view for screenshot
-  for (const key of ['cells', 'qpoints']) { const b = page.locator(`input[data-layer="${key}"]`); if (!(await b.isChecked())) await b.click(); }
+  for (const key of ['quarters', 'existing']) { const b = page.locator(`input[data-layer="${key}"]`); if (!(await b.isChecked())) await b.click(); }
   for (const key of ['city', 'districts', 'labels', 'plans']) { const b = page.locator(`input[data-layer="${key}"]`); if (!(await b.isChecked())) await b.click(); }
-  for (const t of ['יעד אוכלוסייה', 'תוספת יח"ד', 'סף 6.3']) {
+  for (const t of ['יעד אוכלוסייה', 'סף 6.3', 'התקדמות ליעד']) {
     await page.getByRole('tab', { name: t }).click();
     await expect(page.getByRole('tab', { name: t })).toHaveAttribute('aria-selected', 'true');
   }
@@ -146,7 +148,7 @@ test('map page: every layer toggle, themes, district selection, copy link', asyn
     expect(new URL(page.url()).searchParams.get('base')).toBe(key);
     await expect.poll(srcs).toContain(src);
     await expect.poll(srcs).toContain('districts');
-    await expect(page.locator('.map-label')).toHaveCount(8);
+    await expect(page.locator('.map-label')).toHaveCount(9);
   }
   const labelField = await page.evaluate(() => JSON.stringify((window as unknown as { __map: { getLayoutProperty: (l: string, p: string) => unknown } }).__map.getLayoutProperty('ofm-label', 'text-field')));
   expect(labelField).toContain('name:he');
@@ -155,6 +157,16 @@ test('map page: every layer toggle, themes, district selection, copy link', asyn
   await page.locator('.map-label[data-district="2"]').click();
   await expect(page.locator('.map-card h3')).toHaveText('מרכז מתחדש');
   expect(new URL(page.url()).searchParams.get('d')).toBe('2');
+  await expect(page.getByTestId('topic-cell')).toContainText('חינוך יסודי');
+  await expect(page.getByTestId('topic-cell')).toContainText('352');
+  for (const t of ['housing', 'kinder', 'openspace', 'public', 'commerce', 'employment', 'roads', 'education']) {
+    await page.getByLabel('נושא', { exact: true }).selectOption(t);
+    expect(new URL(page.url()).searchParams.get('topic')).toBe(t);
+    const vis = await page.evaluate(() => { const m = (window as unknown as { __map: { getLayoutProperty: (l: string, p: string) => string } }).__map; return ['ex-edu', 'ex-parks', 'ex-buildings', 'ex-roads', 'ex-shops', 'ex-public'].filter((l) => m.getLayoutProperty(l, 'visibility') === 'visible'); });
+    const expected: Record<string, string[]> = { housing: ['ex-buildings'], kinder: ['ex-edu'], openspace: ['ex-parks'], public: ['ex-public'], commerce: ['ex-shops'], employment: [], roads: ['ex-roads'], education: ['ex-edu'] };
+    expect(vis).toEqual(expected[t]);
+  }
+  await expect(page.locator('.map-label[data-district="2"]')).toContainText('חינוך יסודי');
   await page.waitForTimeout(1200);
   await page.screenshot({ path: SHOTS + 'map-layers.png' });
   await page.locator('.sys-btn').click();
@@ -193,6 +205,8 @@ test('admin: top bar links, district edit, plan create + decision, rules, regist
   await page.getByTestId('district-card-2').click();
   await expect(page.getByRole('heading', { name: 'מרכז מתחדש' })).toBeVisible();
   await expect(page.getByText('דוגמה: פינוי-בינוי')).toBeVisible();
+  await expect(page.getByTestId('district-topics').locator('tr[data-topic="education"]')).toContainText('208');
+  await expect(page.getByTestId('district-topics').locator('tr[data-topic="public"]')).toContainText('חסר');
   await page.getByRole('button', { name: 'עדכון אוכלוסייה קיימת' }).click();
   await page.getByLabel('אוכלוסייה קיימת').fill('70000');
   await page.getByLabel('מקור הנתון').fill('בדיקה');
@@ -227,11 +241,23 @@ test('admin: top bar links, district edit, plan create + decision, rules, regist
   await expect(page.getByRole('tab', { name: /שטחים וסף-בית/ })).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('.rule-card .cert').first()).toBeVisible();
   await page.screenshot({ path: SHOTS + 'plan-new.png', fullPage: true });
+  // program step and bill of quantities
+  await page.getByRole('tab', { name: /פרוגרמה/ }).click();
+  await page.getByLabel('כיתות יסודי').fill('3');
+  await page.getByLabel('כיתות גן').fill('5');
+  await page.getByLabel('שצ"פ, מ"ר').fill('1200');
+  await page.getByLabel('מסחר, מ"ר').fill('800');
+  const boq = page.getByTestId('boq');
+  await expect(boq.locator('tr[data-boq="classrooms"]')).toContainText('חסר מענה');
+  await expect(boq.locator('tr[data-boq="kinder"]')).toContainText('עונה');
+  await expect(boq.locator('tr[data-boq="commerce"]')).toContainText('אין יעד');
+  await expect(boq.locator('tr[data-boq="roads"]')).toContainText('חסר נתון');
+  await page.screenshot({ path: SHOTS + 'plan-boq.png', fullPage: true });
   await page.getByRole('button', { name: 'שמירת תכנית' }).click();
   await expect.poll(() => writes.filter((w) => w.table === 'mt_checks').length).toBe(1);
   const planWrite = writes.find((w) => w.table === 'mt_plans')!;
   expect(planWrite.method).toBe('POST');
-  expect(planWrite.body).toMatchObject({ name: 'תכנית בדיקה', district_id: 2, units_added: 300, is_renewal: true, far: 4, rahak_row: 2 });
+  expect(planWrite.body).toMatchObject({ name: 'תכנית בדיקה', district_id: 2, units_added: 300, is_renewal: true, far: 4, rahak_row: 2, program: { classrooms: 3, kindergartens: 5, open_space_m2: 1200, commerce_m2: 800 } });
   expect((writes.find((w) => w.table === 'mt_checks')!.body as unknown[]).length).toBe(8);
 
   // existing example plan: decision
@@ -313,7 +339,7 @@ test('mobile: no horizontal scroll on every page', async ({ browser }) => {
   page.on('pageerror', (e) => errors.push(e.message));
   await mock(page, { admin: true });
   const t1 = (FX.mt_plans as { id: string }[])[0].id;
-  for (const path of ['/documents', '/', '/map', '/district/2', '/district/8', '/plan/new', `/plan/${t1}`, '/rules', '/register', `/report/${new Date().getFullYear()}`]) {
+  for (const path of ['/about', '/documents', '/', '/map', '/district/2', '/district/8', '/plan/new', `/plan/${t1}`, '/rules', '/register', `/report/${new Date().getFullYear()}`]) {
     await page.goto(path);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(400);
@@ -417,4 +443,17 @@ test('sign-in by pasting the emailed link or the dead-end address, then a clear 
   await page.getByRole('button', { name: 'כניסה עם הקישור' }).click();
   await expect(page.getByTestId('signed-banner')).toContainText('הרשאה: מנהלת');
   expect(writes.filter((w) => w.table === 'auth/verify').map((w) => (w.body as { token_hash: string }).token_hash)).toContain('pkce_abc123');
+});
+
+test('about page explains input, computation and output', async ({ page }) => {
+  await mock(page, { admin: false });
+  await page.goto('/');
+  await page.getByRole('link', { name: 'איך זה עובד' }).first().click();
+  await expect(page).toHaveURL(/\/about$/);
+  await expect(page.getByRole('heading', { name: 'קלט, חישוב ופלט' })).toBeVisible();
+  for (const t of ['1. קלט', '2. חישוב', '3. פלט']) await expect(page.getByText(t)).toBeVisible();
+  await expect(page.locator('table').first().locator('tbody tr')).toHaveCount(8);
+  await page.screenshot({ path: SHOTS + 'about.png', fullPage: true });
+  await page.getByRole('link', { name: 'למפה' }).click();
+  await expect(page).toHaveURL(/\/map$/);
 });
