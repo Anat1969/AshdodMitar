@@ -7,7 +7,7 @@
 //  - unknown => null ("חסר"); nothing is invented.
 import type { Certainty } from './rules';
 
-export interface Domain { key: string; title: string; unit: string; sort: number; target_rule: string | null; target_certainty: string }
+export interface Domain { key: string; title: string; unit: string; sort: number; target_rule: string | null; target_certainty: string; kind?: 'target' | 'fact' }
 export interface Target {
   district_id: number; domain_key: string;
   target: number | null; target_source: string | null; target_page: number | null; target_certainty: string;

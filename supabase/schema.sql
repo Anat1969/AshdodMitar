@@ -159,3 +159,13 @@ alter table mt_plans add column lots jsonb, add column mavat_number text;   -- l
 -- mt_plan_quantities.origin also allows 'mavat' (rows read from מבא"ת tables, always draft)
 -- mt_documents.file_path 'public:/plans/...' = a public file served by the app (public/plans)
 -- Plan תמל/2022 seeded from public/plans/tml-2022/seed.json via http_get of the repository raw file.
+-- Simple flow (added 2026-10-17)
+create table mt_plan_layers (id uuid primary key default gen_random_uuid(), plan_id uuid not null references mt_plans(id) on delete cascade,
+  kind text not null check (kind in ('blue_line','land_use','building_lines','demolish','proposed','existing','tashrit')),
+  geojson jsonb, image_url text, image_bounds jsonb, accuracy text not null default 'approx' check (accuracy in ('exact','approx')),
+  source text, note text, created_by text, created_at timestamptz default now(), unique (plan_id, kind));   -- public read, editor write
+alter table mt_plans add column quarter text, add column mavat_url text, add column deposit_date date;
+alter table mt_domains add column kind text not null default 'target';   -- 'fact' rows: units_existing, units_proposed, main_m2, service_m2, floors_max
+-- public read: mt_plans where not is_example; mt_plan_quantities where status='approved'; mt_documents where file_path like 'public:%'
+-- 603-0811588 loaded from plan_projects + https://ashdod-ma-nivne.vercel.app/plans/603-0811588/model.json (SQL http_get)
+-- תמל/2022 layers from public/plans/tml-2022/layers.json (scripts/layers-tml-2022.ts)

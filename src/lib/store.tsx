@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { loadDecisions, loadPlans, loadPublic, loadQuantities, toInput, type Decision, type Plan, type PublicData } from './data';
-import { buildLedger, type Ledger, type Quantity } from './ledger';
+import { buildLedger, type Domain, type Ledger, type Quantity } from './ledger';
 import { districtGate, renewalBalance, type RuleResult } from './rules';
 import { useAuth } from './auth';
 import { type TopicCell, type TopicKey } from './topics';
@@ -9,7 +9,7 @@ interface Store extends PublicData {
   plans: Plan[]; decisions: Decision[]; loading: boolean; error: string | null;
   gates: Record<number, RuleResult>; renewal: RuleResult; refresh: () => Promise<void>;
   matrix: Record<number, Record<TopicKey, TopicCell>>;
-  quantities: Quantity[]; ledger: Ledger;
+  quantities: Quantity[]; ledger: Ledger; factDomains: Domain[];
 }
 const Ctx = createContext<Store | null>(null);
 const EMPTY: PublicData = { city: null, districts: [], features: [], rules: [], register: [], existing: [], domains: [], targets: [] };
@@ -20,6 +20,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [quantities, setQuantities] = useState<Quantity[]>([]);
+  const [factDomains, setFactDomains] = useState<Domain[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,11 +28,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       setError(null);
       const p = await loadPublic();
-      setPub(p);
-      if (isMember) {
-        const [pl, de, qs] = await Promise.all([loadPlans(), loadDecisions(), loadQuantities()]);
-        setPlans(pl); setDecisions(de); setQuantities(qs);
-      } else { setPlans([]); setDecisions([]); setQuantities([]); }
+      // target domains drive the ledger; "fact" domains (units existing / proposed, areas, floors) feed the plan card only
+      setPub({ ...p, domains: p.domains.filter((d) => (d.kind ?? 'target') === 'target') });
+      setFactDomains(p.domains.filter((d) => d.kind === 'fact'));
+      // published plans and approved quantities are public; members also get drafts and example plans (RLS)
+      const [pl, qs, de] = await Promise.all([loadPlans(), loadQuantities(), isMember ? loadDecisions() : Promise.resolve([])]);
+      setPlans(pl); setQuantities(qs); setDecisions(de);
     } catch (e) {
       setError((e as Error).message);
     } finally { setLoading(false); }
@@ -58,7 +60,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return out;
   }, [ledger]);
 
-  return <Ctx.Provider value={{ ...pub, plans, decisions, loading, error, gates, renewal, refresh, matrix, quantities, ledger }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ ...pub, plans, decisions, loading, error, gates, renewal, refresh, matrix, quantities, ledger, factDomains }}>{children}</Ctx.Provider>;
 }
 
 export function useStore() {

@@ -55,7 +55,7 @@ export default function PlanFilePage() {
 
   return (
     <Page kicker={isNew ? 'תכנית חדשה' : `תיק תכנית ${plan?.plan_number ?? ''}`} title={isNew ? 'פתיחת תיק תכנית' : plan!.name}
-      actions={!isNew && <><Link className="btn primary" to={`/map?plan=${plan!.id}`}>במפה</Link><Link className="btn" to={`/plan/${plan!.id}`}>בדיקת כללי מדיניות</Link><Link className="btn" to="/ledger">מאזן מימוש</Link></>}>
+      actions={!isNew && <><Link className="btn primary" to={`/plan/${encodeURIComponent(plan!.mavat_number || plan!.plan_number || plan!.id)}`}>דף התכנית</Link><Link className="btn" to={`/tools/check/${plan!.id}`}>בדיקת כללי מדיניות</Link><Link className="btn" to="/ledger">מאזן מימוש</Link></>}>
       <section className="card" data-testid="plan-head">
         <div className="card-head"><h2>1. פרטי התכנית</h2>{plan && <span className="chip st-info">{BUCKET_LABEL[planBucket(plan, null)]}</span>}</div>
         <div className="form-grid">

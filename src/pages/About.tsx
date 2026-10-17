@@ -17,7 +17,7 @@ export default function AboutPage() {
         <Link className="btn primary" to="/overview">לתמונת העיר</Link>
         <Link className="btn" to="/ledger">מאזן מימוש</Link>
         <Link className="btn" to="/plans">תכניות</Link>
-        <Link className="btn" to="/map">מפה ושכבות</Link>
+        <Link className="btn" to="/tools/layers">מפה ושכבות</Link>
       </div>
       <p className="lead">התאום מחזיק תמונה אחת של העיר: מה קיים היום, מה מתוכנן, ומה היעד שתכנית המתאר קובעת. כל תכנית שנכנסת היא תוספת לתמונה הזו, והמפה והמספרים מתעדכנים בהתאם.</p>
 
@@ -94,7 +94,7 @@ export default function AboutPage() {
           <li>פרוגרמה לצרכי ציבור, נספח תנועה ותוואי מתע"ן</li>
           <li>רשימת התכניות האמיתיות בצנרת</li>
         </ul>
-        <div className="row-actions"><Link className="btn primary" to="/plan/new">לבדיקת תכנית</Link><Link className="btn" to="/map">למפה</Link></div>
+        <div className="row-actions"><Link className="btn primary" to="/tools/check/new">לבדיקת תכנית</Link><Link className="btn" to="/map">למפת התכניות</Link></div>
       </section>
     </Page>
   );

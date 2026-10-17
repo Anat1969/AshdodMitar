@@ -61,7 +61,7 @@ export default function PlanPage() {
     const chk = await supabase.from('mt_checks').insert(results.map((r) => ({ plan_id: planId, rule_id: r.id, rule_version: 1, status: r.status, values: r.values, message: r.message })));
     setMsg(chk.error ? `התכנית נשמרה, הבדיקה לא: ${chk.error.message}` : 'נשמר, והבדיקה נרשמה');
     await refresh();
-    if (!pid) nav(`/plan/${planId}`, { replace: true });
+    if (!pid) nav(`/tools/check/${planId}`, { replace: true });
   };
 
   const saveDecision = async () => {
