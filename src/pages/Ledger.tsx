@@ -94,7 +94,7 @@ export default function LedgerPage() {
       </div>
 
       <section className="card">
-        <div className="card-head"><h2>כל המתחמים והתחומים</h2><Link className="btn small" to="/map?theme=progress">במפה</Link></div>
+        <div className="card-head"><h2>כל המתחמים והתחומים</h2><Link className="btn small" to="/tools/layers?theme=progress">במפה</Link></div>
         <CityLedger ledger={ledger} domains={domains} districts={shown.length ? shown : districts} />
       </section>
     </Page>

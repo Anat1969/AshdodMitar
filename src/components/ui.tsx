@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 import { CERTAINTY_LABEL, STATUS_LABEL, type RuleResult, type Status } from '../lib/rules';
@@ -102,4 +103,15 @@ export function TopicsTable({ cells, isMember, testId }: { cells: Record<TopicKe
 
 export function Loading({ error }: { error?: string | null }) {
   return <div className="loading">{error ? `שגיאה בטעינת נתונים: ${error}` : 'טוען נתונים'}</div>;
+}
+
+// Every page ends with one clear next step.
+export function NextStep({ to, label, why }: { to: string; label: string; why?: string }) {
+  return (
+    <nav className="next-step" aria-label="הצעד הבא">
+      <span className="kicker">הצעד הבא</span>
+      <Link to={to} className="btn primary" data-testid="next-step">{label}</Link>
+      {why && <span className="ls">{why}</span>}
+    </nav>
+  );
 }

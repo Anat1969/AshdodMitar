@@ -64,7 +64,7 @@ export default function ReportPage() {
           <div className="table-wrap">
             <table className="table">
               <thead><tr><th>תכנית</th><th>מתחם</th><th>סטטוס</th><th>יח"ד</th><th>תושבים</th></tr></thead>
-              <tbody>{plans.map((p) => <tr key={p.id}><td><Link to={`/plan/${p.id}`}>{p.name}</Link></td><td className="mono">{p.district_id}</td><td>{PLAN_STATUS_LABEL[p.status]}</td><td className="mono">{fmt(p.units_added)}</td><td className="mono">{fmt(population(toInput(p)).values.population as number)}</td></tr>)}</tbody>
+              <tbody>{plans.map((p) => <tr key={p.id}><td><Link to={`/tools/check/${p.id}`}>{p.name}</Link></td><td className="mono">{p.district_id}</td><td>{PLAN_STATUS_LABEL[p.status]}</td><td className="mono">{fmt(p.units_added)}</td><td className="mono">{fmt(population(toInput(p)).values.population as number)}</td></tr>)}</tbody>
             </table>
           </div>
         </section>

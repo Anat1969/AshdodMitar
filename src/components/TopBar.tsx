@@ -47,16 +47,11 @@ export default function TopBar() {
             <span className="brand-sub mono">603-0528026</span>
           </Link>
           <nav className="tb-nav" aria-label="ניווט ראשי">
-            <NavLink to="/" end>איך זה עובד</NavLink>
-            <NavLink to="/overview">תמונת העיר</NavLink>
-            <NavLink to="/ledger">מאזן מימוש</NavLink>
-            <NavLink to="/plans">תכניות</NavLink>
-            <NavLink to="/map">מפה ושכבות</NavLink>
-            <NavLink to="/plan/new">בדיקת תכנית</NavLink>
-            <NavLink to="/documents">מסמכים</NavLink>
-            <NavLink to="/rules">כללים</NavLink>
-            <NavLink to="/register">מרשם מדיניות</NavLink>
-            <NavLink to={`/report/${new Date().getFullYear()}`}>דוח 6.2</NavLink>
+            <NavLink to="/" end>בית</NavLink>
+            <NavLink to="/map">מפה</NavLink>
+            <NavLink to="/add">הוספת תכנית</NavLink>
+            <NavLink to="/compare">השוואה ליעד</NavLink>
+            <NavLink to="/tools" className={({ isActive }) => (isActive || /^\/(tools|about|overview|ledger|plans|targets|district|documents|rules|register|report)/.test(loc.pathname) ? 'active' : '')}>כלים נוספים</NavLink>
           </nav>
           <div className="tb-actions">
             <button type="button" className={`btn small sys-btn ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="sys-panel">

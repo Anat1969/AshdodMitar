@@ -34,7 +34,7 @@ export default function DistrictPage() {
   };
 
   return (
-    <Page kicker={`מתחם ${d.id}`} title={d.name} actions={canWrite && <><Link className="btn primary" to="/plans/new">תיק תכנית חדש</Link><Link className="btn" to={`/plan/new?district=${d.id}`}>הוספת תכנית</Link></>}>
+    <Page kicker={`מתחם ${d.id}`} title={d.name} actions={canWrite && <><Link className="btn primary" to="/plans/new">תיק תכנית חדש</Link><Link className="btn" to={`/tools/check/new?district=${d.id}`}>הוספת תכנית</Link></>}>
       <div className="two-col">
         <section className="card">
           <div className="card-head"><h2>סף אוכלוסייה, סעיף 6.3</h2><CertaintyChip certainty="plan-draft" /></div>
@@ -66,7 +66,7 @@ export default function DistrictPage() {
           <div className="row-actions">
             <button type="button" className="btn small" onClick={() => downloadXlsx(`ashdod-ledger-district-${d.id}.xlsx`, [{ name: 'מאזן', rows: ledgerRows(ledger, domains, districts, d.id) }, { name: 'כמויות', rows: quantityRows(quantities, plans, domains, d.id) }])}>ייצוא לאקסל</button>
             <button type="button" className="btn small" onClick={() => window.print()}>ייצוא ל-PDF</button>
-            <Link className="btn small" to={`/map?d=${d.id}&theme=progress`}>במפה</Link>
+            <Link className="btn small" to={`/tools/layers?d=${d.id}&theme=progress`}>במפה</Link>
           </div></div>
         <DistrictLedger districtId={d.id} ledger={ledger} domains={domains} plans={plans} isMember={isMember} />
       </section>

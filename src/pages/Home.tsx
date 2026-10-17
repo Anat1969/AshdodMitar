@@ -26,8 +26,8 @@ export default function Home() {
           <h1 className="display">כל תכנית היא דלתא בתאום העיר</h1>
           <p className="lead">בודקים תכנית מול כללי המדיניות, גוזרים ביקוש ציבורי, ורואים את ההשפעה המצטברת על המתחם מול הספים שהתכנית עצמה קובעת (סעיפים 6.1, 6.2 ו-6.3).</p>
           <div className="row-actions">
-            <Link className="btn primary" to="/map">מפה ושכבות</Link>
-            <Link className="btn" to="/plan/new">בדיקת תכנית</Link>
+            <Link className="btn primary" to="/tools/layers">מפה ושכבות</Link>
+            <Link className="btn" to="/tools/check/new">בדיקת תכנית</Link>
             <Link className="btn" to={`/report/${new Date().getFullYear()}`}>דוח 6.2</Link>
           </div>
         </motion.div>
