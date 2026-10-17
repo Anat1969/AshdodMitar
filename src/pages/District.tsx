@@ -6,11 +6,13 @@ import { supabase } from '../lib/supabase';
 import { fmt, PLAN_STATUS_LABEL, toInput } from '../lib/data';
 import { renewalBalance } from '../lib/rules';
 import MapView from '../components/MapView';
-import { CertaintyChip, Gauge, Loading, Page, RuleCard, TopicsTable } from '../components/ui';
+import { CertaintyChip, Gauge, Loading, Page, RuleCard } from '../components/ui';
+import { DistrictLedger } from '../components/ledger';
+import { downloadXlsx, ledgerRows, quantityRows } from '../lib/export';
 
 export default function DistrictPage() {
   const { id } = useParams();
-  const { districts, plans, gates, loading, error, refresh, matrix } = useStore();
+  const { districts, plans, gates, loading, error, refresh, ledger, domains, quantities } = useStore();
   const { isMember, canWrite } = useAuth();
   const [edit, setEdit] = useState(false);
   const [pop, setPop] = useState('');
@@ -32,7 +34,7 @@ export default function DistrictPage() {
   };
 
   return (
-    <Page kicker={`מתחם ${d.id}`} title={d.name} actions={canWrite && <Link className="btn primary" to={`/plan/new?district=${d.id}`}>הוספת תכנית</Link>}>
+    <Page kicker={`מתחם ${d.id}`} title={d.name} actions={canWrite && <><Link className="btn primary" to="/plans/new">תיק תכנית חדש</Link><Link className="btn" to={`/plan/new?district=${d.id}`}>הוספת תכנית</Link></>}>
       <div className="two-col">
         <section className="card">
           <div className="card-head"><h2>סף אוכלוסייה, סעיף 6.3</h2><CertaintyChip certainty="plan-draft" /></div>
@@ -59,12 +61,15 @@ export default function DistrictPage() {
         </section>
       </div>
 
-      {matrix[d.id] && (
-        <section className="card">
-          <div className="card-head"><h2>נושאים: קיים, מתוכנן ויעד</h2><Link className="btn small" to={`/map?d=${d.id}&theme=progress`}>במפה</Link></div>
-          <TopicsTable cells={matrix[d.id]} isMember={isMember} testId="district-topics" />
-        </section>
-      )}
+      <section className="card">
+        <div className="card-head"><h2>מאזן המימוש של המתחם</h2>
+          <div className="row-actions">
+            <button type="button" className="btn small" onClick={() => downloadXlsx(`ashdod-ledger-district-${d.id}.xlsx`, [{ name: 'מאזן', rows: ledgerRows(ledger, domains, districts, d.id) }, { name: 'כמויות', rows: quantityRows(quantities, plans, domains, d.id) }])}>ייצוא לאקסל</button>
+            <button type="button" className="btn small" onClick={() => window.print()}>ייצוא ל-PDF</button>
+            <Link className="btn small" to={`/map?d=${d.id}&theme=progress`}>במפה</Link>
+          </div></div>
+        <DistrictLedger districtId={d.id} ledger={ledger} domains={domains} plans={plans} isMember={isMember} />
+      </section>
 
       <div className="two-col">
         <section className="card">
@@ -89,7 +94,7 @@ export default function DistrictPage() {
               <div key={g.s} className="plan-group">
                 <h3 className="sub">{PLAN_STATUS_LABEL[g.s]} <span className="mono">{g.items.length}</span></h3>
                 {g.items.map((p) => (
-                  <Link key={p.id} to={`/plan/${p.id}`} className="plan-row">
+                  <Link key={p.id} to={`/plans/${p.id}`} className="plan-row">
                     <span className="mono">{p.plan_number ?? 'ללא מספר'}</span><span>{p.name}</span><span className="mono">{fmt(p.units_added)} יח"ד</span>
                     {p.is_example && <span className="chip st-info">דוגמה</span>}
                   </Link>

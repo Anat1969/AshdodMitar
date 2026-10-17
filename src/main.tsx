@@ -13,6 +13,10 @@ import RegisterPage from './pages/Register';
 import ReportPage from './pages/Report';
 import DocumentsPage from './pages/Documents';
 import AboutPage from './pages/About';
+import LedgerPage from './pages/Ledger';
+import PlansPage from './pages/Plans';
+import PlanFilePage from './pages/PlanFile';
+import TargetsPage from './pages/Targets';
 import './styles.css';
 
 function App() {
@@ -22,6 +26,10 @@ function App() {
       <Routes>
         <Route path="/" element={<AboutPage />} />
         <Route path="/overview" element={<Home />} />
+        <Route path="/ledger" element={<LedgerPage />} />
+        <Route path="/plans" element={<PlansPage />} />
+        <Route path="/plans/:id" element={<PlanFilePage />} />
+        <Route path="/targets" element={<TargetsPage />} />
         <Route path="/map" element={<MapPage />} />
         <Route path="/district/:id" element={<DistrictPage />} />
         <Route path="/plan/:id" element={<PlanPage />} />

@@ -49,6 +49,8 @@ export default function TopBar() {
           <nav className="tb-nav" aria-label="ניווט ראשי">
             <NavLink to="/" end>איך זה עובד</NavLink>
             <NavLink to="/overview">תמונת העיר</NavLink>
+            <NavLink to="/ledger">מאזן מימוש</NavLink>
+            <NavLink to="/plans">תכניות</NavLink>
             <NavLink to="/map">מפה ושכבות</NavLink>
             <NavLink to="/plan/new">בדיקת תכנית</NavLink>
             <NavLink to="/documents">מסמכים</NavLink>

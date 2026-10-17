@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
@@ -11,6 +11,7 @@ import type { Status } from '../lib/rules';
 import { BASEMAPS, EMPTY_STYLE, ensureRtlPlugin, loadBaseStyle, PLAIN_STYLE, type BaseKey } from '../lib/basemaps';
 import { plannedFor, TOPICS, type TopicKey } from '../lib/topics';
 import { toInput } from '../lib/data';
+import { bboxOf } from '../lib/gis';
 
 export type LayerKey = 'city' | 'districts' | 'labels' | 'quarters' | 'existing' | 'plans' | 'extrude' | 'transit' | 'official';
 interface LayerDef { key: LayerKey; title: string; certainty: string; source: string; available: boolean; note?: string; membersOnly?: boolean }
@@ -55,7 +56,7 @@ function hatch(): ImageData {
 }
 
 export default function MapView({ full = false, focus }: { full?: boolean; focus?: number }) {
-  const { districts, features, plans, gates, existing, matrix } = useStore();
+  const { districts, features, plans, gates, existing, matrix, quantities, domains } = useStore();
   const { isMember } = useAuth();
   const [params, setParams] = useSearchParams();
   const box = useRef<HTMLDivElement>(null);
@@ -73,7 +74,8 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
   const active = useMemo(() => new Set((params.get('layers')?.split(',').filter(Boolean) as LayerKey[]) ?? DEFAULT_LAYERS), [params]);
   const theme = (params.get('theme') as Theme) || 'progress';
   const topic = ((params.get('topic') as TopicKey) || 'education') as TopicKey;
-  const topicDef = TOPICS.find((t) => t.key === topic) ?? TOPICS[1];
+  const topicList = domains.length ? domains.map((d) => ({ key: d.key, title: d.title, unit: d.unit, targetRule: d.target_rule ?? '' })) : TOPICS;
+  const topicDef = topicList.find((t) => t.key === topic) ?? topicList[1] ?? TOPICS[1];
   const [zoomLow, setZoomLow] = useState(true);
   const base = ((params.get('base') as BaseKey) || 'streets') as BaseKey;
   const sat = base === 'sat';
@@ -108,14 +110,27 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
     features: features.filter((f) => f.layer === layer).map((f) => ({ type: 'Feature', geometry: f.geom, properties: { id: f.id, name: f.name } })),
   });
 
-  const planFC = useMemo<GeoJSON.FeatureCollection>(() => ({
+  // what each plan adds in the chosen topic: approved quantities first, drafts when nothing is approved yet
+  const planQty = useCallback((pid: string) => {
+    const mine = quantities.filter((q) => q.plan_id === pid && q.domain_key === topic && q.value != null);
+    const ok = mine.filter((q) => q.status === 'approved');
+    return (ok.length ? ok : mine).reduce((a, q) => a + (q.value ?? 0), 0);
+  }, [quantities, topic]);
+  const planFC = useMemo<GeoJSON.FeatureCollection>(() => {
+    const max = Math.max(1, ...plans.map((x) => planQty(x.id) || plannedFor(topic, toInput(x))));
+    return {
+      type: 'FeatureCollection',
+      features: plans.filter((p) => p.location || p.boundary).map((p) => {
+        const q = planQty(p.id) || plannedFor(topic, toInput(p));
+        const at: GeoJSON.Point = p.location ?? (() => { const b = bboxOf(p.boundary!); return { type: 'Point', coordinates: [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] } as GeoJSON.Point; })();
+        return { type: 'Feature', geometry: at, properties: { id: p.id, name: p.name, approved: p.status === 'approved' ? 1 : 0, r: q > 0 ? 7 + 15 * Math.sqrt(q / max) : 5 } };
+      }),
+    };
+  }, [plans, topic, planQty]);
+  const planAreaFC = useMemo<GeoJSON.FeatureCollection>(() => ({
     type: 'FeatureCollection',
-    features: plans.filter((p) => p.location).map((p) => {
-      const q = plannedFor(topic, toInput(p));
-      const max = Math.max(1, ...plans.map((x) => plannedFor(topic, toInput(x))));
-      return { type: 'Feature', geometry: p.location!, properties: { id: p.id, name: p.name, approved: p.status === 'approved' ? 1 : 0, r: q > 0 ? 7 + 15 * Math.sqrt(q / max) : 5 } };
-    }),
-  }), [plans, topic]);
+    features: plans.filter((p) => p.boundary).map((p) => ({ type: 'Feature', geometry: p.boundary!, properties: { id: p.id, approved: p.status === 'approved' ? 1 : 0 } })),
+  }), [plans]);
   const existingFC = useMemo<GeoJSON.FeatureCollection>(() => ({
     type: 'FeatureCollection',
     features: existing.map((e) => ({ type: 'Feature', geometry: e.geom, properties: { id: e.id, name: e.name, sub: e.subtype, school: e.subtype === 'בית ספר' ? 1 : 0, kinder: (e.subtype ?? '').startsWith('גן') ? 1 : 0, classes: e.qty?.classes ?? 1 } })),
@@ -134,7 +149,7 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
       if (!map.hasImage('hatch')) map.addImage('hatch', hatch());
       if (!map.getSource('districts')) {
         const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-        for (const s of ['city', 'districts', 'quarters', 'existing', 'plans']) map.addSource(s, { type: 'geojson', data: empty });
+        for (const s of ['city', 'districts', 'quarters', 'existing', 'plans', 'plan-areas']) map.addSource(s, { type: 'geojson', data: empty });
         map.addSource('ofm', { type: 'vector', url: 'https://tiles.openfreemap.org/planet', attribution: 'OpenFreeMap © OpenMapTiles © OpenStreetMap contributors' });
         // existing, by topic, from OpenStreetMap vector tiles (real geometry, aligned with the map by definition)
         map.addLayer({ id: 'ex-parks', type: 'fill', source: 'ofm', 'source-layer': 'landcover', filter: ['match', ['get', 'subclass'], ['park', 'garden', 'recreation_ground', 'playground', 'village_green', 'grass'], true, false], paint: { 'fill-color': '#5f9b6e', 'fill-opacity': 0.55 }, layout: { visibility: 'none' } });
@@ -149,6 +164,8 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
         map.addLayer({ id: 'quarters-line', type: 'line', source: 'quarters', paint: { 'line-color': '#5d646f', 'line-width': 1, 'line-dasharray': [3, 2] } });
         map.addLayer({ id: 'ex-edu', type: 'circle', source: 'existing', paint: { 'circle-radius': ['case', ['==', ['get', 'school'], 1], ['interpolate', ['linear'], ['get', 'classes'], 1, 4, 40, 11], 3], 'circle-color': ['case', ['==', ['get', 'school'], 1], '#2b3038', '#ffffff'], 'circle-stroke-color': '#2b3038', 'circle-stroke-width': 1.3 }, layout: { visibility: 'none' } });
         map.addLayer({ id: 'city-line', type: 'line', source: 'city', paint: { 'line-color': '#15181d', 'line-width': 2.6 } });
+        map.addLayer({ id: 'plan-areas-fill', type: 'fill', source: 'plan-areas', paint: { 'fill-color': ['case', ['==', ['get', 'approved'], 1], '#4f7a63', '#b7832a'], 'fill-opacity': 0.32 } });
+        map.addLayer({ id: 'plan-areas-line', type: 'line', source: 'plan-areas', paint: { 'line-color': ['case', ['==', ['get', 'approved'], 1], '#1f3b2c', '#8a5f12'], 'line-width': 2, 'line-dasharray': ['case', ['==', ['get', 'approved'], 1], ['literal', [1, 0]], ['literal', [3, 2]]] } });
         map.addLayer({ id: 'plans', type: 'circle', source: 'plans', paint: { 'circle-radius': ['get', 'r'], 'circle-color': ['case', ['==', ['get', 'approved'], 1], 'rgba(79,122,99,0.75)', 'rgba(183,131,42,0.55)'], 'circle-stroke-color': '#15181d', 'circle-stroke-width': 2 } });
       }
       styleOk.current = true;
@@ -156,7 +173,8 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
     };
     map.on('click', 'districts-fill', (e) => { const id = e.features?.[0]?.properties?.id; if (id) clickDistrict.current(Number(id)); });
     map.on('click', 'plans', (e) => { const id = e.features?.[0]?.properties?.id; if (id) clickPlan.current(String(id)); });
-    for (const l of ['districts-fill', 'plans']) {
+    map.on('click', 'plan-areas-fill', (e) => { const id = e.features?.[0]?.properties?.id; if (id) clickPlan.current(String(id)); });
+    for (const l of ['districts-fill', 'plans', 'plan-areas-fill']) {
       map.on('mouseenter', l, () => (map.getCanvas().style.cursor = 'pointer'));
       map.on('mouseleave', l, () => (map.getCanvas().style.cursor = ''));
     }
@@ -209,6 +227,7 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
     (map.getSource('quarters') as GeoJSONSource).setData(fc('quarters_official'));
     (map.getSource('existing') as GeoJSONSource).setData(existingFC);
     (map.getSource('plans') as GeoJSONSource).setData(planFC);
+    (map.getSource('plan-areas') as GeoJSONSource | undefined)?.setData(planAreaFC);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [styleRev, districtFC, planFC, features, existingFC]);
 
@@ -229,6 +248,7 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
     map.setLayoutProperty('ex-shops', 'visibility', vis(ex && topic === 'commerce'));
     map.setLayoutProperty('ex-public', 'visibility', vis(ex && topic === 'public'));
     map.setLayoutProperty('plans', 'visibility', vis(active.has('plans') && isMember));
+    for (const l of ['plan-areas-fill', 'plan-areas-line']) map.setLayoutProperty(l, 'visibility', vis(active.has('plans') && isMember));
     map.setLayoutProperty('extrude', 'visibility', vis(active.has('extrude')));
     map.setPaintProperty('districts-line', 'line-color', sat ? '#ffffff' : '#2b3038');
     map.setPaintProperty('city-line', 'line-color', sat ? '#ffe9a8' : '#15181d');
@@ -310,7 +330,7 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
           <label className="topic-pick">
             <span>נושא</span>
             <select className="input" aria-label="נושא" value={topic} onChange={(e) => update('topic', e.target.value)}>
-              {TOPICS.map((t) => <option key={t.key} value={t.key}>{t.title}</option>)}
+              {topicList.map((t) => <option key={t.key} value={t.key}>{t.title}</option>)}
             </select>
           </label>
           <div className="seg" role="tablist" aria-label="צביעת המתחמים">
@@ -342,7 +362,7 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
                 })}
               </ul>
               <Legend theme={theme} topicTitle={topicDef.title} />
-              <div className="ls">{theme === 'progress' && `יעד ${topicDef.title}: ${topicDef.targetRule}.`} קיים ועוד מתוכנן, חלקי היעד. כל תכנית שנשמרת מעדכנת את הצביעה.</div>
+              <div className="ls">{theme === 'progress' && `יעד ${topicDef.title}: ${topicDef.targetRule}.`} קיים ועוד תכניות מאושרות, חלקי היעד. כל נתון שמאושר בתיק תכנית מעדכן את הצביעה.</div>
               {missingGeom.length > 0 && <div className="ls">בלי גבול על המפה: {missingGeom.map((d) => `${d.id} ${d.name}`).join(', ')} (חסר)</div>}
             </motion.aside>
           )}
@@ -359,13 +379,14 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
               <dt>תוספת יח"ד</dt><dd className="mono">{fmt(sel.units_added)}</dd>
               <dt>סף 6.3</dt><dd><StatusChip status={gates[sel.id]?.status ?? 'missing'} gate /></dd>
             </dl>
-            {matrix[sel.id] && (
+            {matrix[sel.id]?.[topic] && (
               <dl className="kv topic-kv" data-testid="topic-cell">
                 <dt><b>{topicDef.title}</b></dt><dd className="ls">{topicDef.unit}</dd>
                 <dt>קיים</dt><dd className="mono">{fmt(matrix[sel.id][topic].existing)}</dd>
-                <dt>מתוכנן</dt><dd className="mono">{isMember ? fmt(matrix[sel.id][topic].planned) : 'לצוות'}</dd>
+                <dt>תכניות מאושרות</dt><dd className="mono">{isMember ? fmt(matrix[sel.id][topic].approved) : 'לצוות'}</dd>
+                <dt>בהליך, תרחיש</dt><dd className="mono">{isMember ? fmt(matrix[sel.id][topic].planned - matrix[sel.id][topic].approved) : 'לצוות'}</dd>
                 <dt>יעד</dt><dd className="mono">{fmt(matrix[sel.id][topic].target)}</dd>
-                <dt>פער</dt><dd className="mono">{fmt(matrix[sel.id][topic].gap)}</dd>
+                <dt>יתרה</dt><dd className="mono">{fmt(matrix[sel.id][topic].gap)}</dd>
                 <dt>התקדמות</dt><dd className="mono">{pct(matrix[sel.id][topic].progress)}</dd>
               </dl>
             )}
@@ -376,9 +397,16 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
           <motion.div className="map-card" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} key={selPlan.id}>
             <div className="mc-head"><span className="mono">{selPlan.plan_number ?? 'תכנית'}</span><button type="button" className="btn ghost small" onClick={() => setPlanSel(null)}>סגירה</button></div>
             <h3>{selPlan.name}</h3>
-            <dl className="kv"><dt>סטטוס</dt><dd>{PLAN_STATUS_LABEL[selPlan.status]}</dd><dt>תוספת יח"ד</dt><dd className="mono">{fmt(selPlan.units_added)}</dd></dl>
+            <dl className="kv"><dt>סטטוס</dt><dd>{PLAN_STATUS_LABEL[selPlan.status]}</dd><dt>תאריך אישור</dt><dd className="mono">{selPlan.approval_date ? selPlan.approval_date.split('-').reverse().join('.') : 'חסר'}</dd></dl>
+            <h4 className="sub">כתב הכמויות</h4>
+            {quantities.some((q) => q.plan_id === selPlan.id) ? (
+              <dl className="kv" data-testid="map-plan-boq">{quantities.filter((q) => q.plan_id === selPlan.id).map((q) => {
+                const dm = domains.find((d) => d.key === q.domain_key);
+                return <Fragment key={q.id}><dt>{dm?.title ?? q.domain_key}{q.district_id ? `, מתחם ${q.district_id}` : ''}</dt><dd className="mono">{fmt(q.value)} {dm?.unit}{q.status === 'draft' ? ' טיוטה' : ''}{q.split === 'area' ? ' הערכה' : ''}</dd></Fragment>;
+              })}</dl>
+            ) : <div className="ls">אין עדיין כמויות לתכנית.</div>}
             {selPlan.is_example && <div className="ls">תכנית דוגמה בדויה. המיקום הוא מרכז המתחם, לא מיקום אמיתי.</div>}
-            <Link className="btn primary" to={`/plan/${selPlan.id}`}>לבדיקת התכנית</Link>
+            <Link className="btn primary" to={`/plans/${selPlan.id}`}>לתיק התכנית</Link>
           </motion.div>
         )}
       </AnimatePresence>

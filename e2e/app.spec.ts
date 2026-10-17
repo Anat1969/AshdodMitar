@@ -28,6 +28,16 @@ async function mock(page: Page, opts: { admin: boolean; noSession?: boolean }) {
         if (req.method() === 'DELETE') return route.fulfill({ json: [] });
         return route.fulfill({ json: { Key: url.pathname, Id: 'obj' } });
       }
+      if (url.pathname.startsWith('/functions/v1/mt-extract')) {
+        if (req.method() === 'GET') return route.fulfill({ json: { ready: true, model: 'claude-opus-5-5' } });
+        if (req.method() === 'OPTIONS') return route.fulfill({ status: 200, body: '' });
+        writes.push({ method: req.method(), table: 'fn:mt-extract', body: req.postDataJSON(), url: req.url() });
+        return route.fulfill({ status: 202, json: { extraction_id: 'ex-2', status: 'running' } });
+      }
+      if (url.pathname === '/rest/v1/rpc/mt_area_split') {
+        writes.push({ method: 'POST', table: 'rpc:mt_area_split', body: req.postDataJSON(), url: req.url() });
+        return route.fulfill({ json: { area_m2: 50000, parts: [{ district_id: 2, area_m2: 30000 }, { district_id: 3, area_m2: 20000 }] } });
+      }
       if (url.pathname === '/auth/v1/settings') return route.fulfill({ json: { external: { google: false, email: true } } });
       if (url.pathname.startsWith('/auth/v1/otp')) { writes.push({ method: 'POST', table: 'auth/otp', body: req.postDataJSON(), url: req.url() }); return route.fulfill({ json: {} }); }
       if (url.pathname.startsWith('/auth/v1/logout')) return route.fulfill({ status: 204, body: '' });
@@ -48,7 +58,9 @@ async function mock(page: Page, opts: { admin: boolean; noSession?: boolean }) {
         if (req.method() === 'GET') {
           reads.push(table);
           let rows = (FX[table] ?? []) as unknown[];
-          if (!opts.admin && ['mt_plans', 'mt_decisions', 'mt_members', 'mt_checks', 'mt_snapshots', 'mt_documents'].includes(table)) rows = [];
+          if (!opts.admin && ['mt_plans', 'mt_decisions', 'mt_members', 'mt_checks', 'mt_snapshots', 'mt_documents', 'mt_plan_quantities', 'mt_extractions'].includes(table)) rows = [];
+          // simple eq filters (col=eq.value) on columns the fixture rows have
+          for (const [k, val] of url.searchParams) if (val.startsWith('eq.') && rows.length && k in (rows[0] as object)) rows = rows.filter((r) => String((r as Record<string, unknown>)[k]) === val.slice(3));
           const single = (req.headers()['accept'] ?? '').includes('vnd.pgrst.object');
           if (single) return rows[0] ? route.fulfill({ json: rows[0] }) : route.fulfill({ status: 406, json: { code: 'PGRST116', message: 'no rows' } });
           return route.fulfill({ json: rows });
@@ -208,8 +220,8 @@ test('admin: top bar links, district edit, plan create + decision, rules, regist
   await page.getByTestId('district-card-2').click();
   await expect(page.getByRole('heading', { name: 'מרכז מתחדש' })).toBeVisible();
   await expect(page.getByText('דוגמה: פינוי-בינוי')).toBeVisible();
-  await expect(page.getByTestId('district-topics').locator('tr[data-topic="education"]')).toContainText('208');
-  await expect(page.getByTestId('district-topics').locator('tr[data-topic="public"]')).toContainText('חסר');
+  await expect(page.getByTestId('district-ledger').locator('tr[data-domain="education"]')).toContainText('208');
+  await expect(page.getByTestId('district-ledger').locator('tr[data-domain="public"]')).toContainText('חסר');
   await page.getByRole('button', { name: 'עדכון אוכלוסייה קיימת' }).click();
   await page.getByLabel('אוכלוסייה קיימת').fill('70000');
   await page.getByLabel('מקור הנתון').fill('בדיקה');
@@ -342,7 +354,7 @@ test('mobile: no horizontal scroll on every page', async ({ browser }) => {
   page.on('pageerror', (e) => errors.push(e.message));
   await mock(page, { admin: true });
   const t1 = (FX.mt_plans as { id: string }[])[0].id;
-  for (const path of ['/', '/overview', '/documents', '/map', '/district/2', '/district/8', '/plan/new', `/plan/${t1}`, '/rules', '/register', `/report/${new Date().getFullYear()}`]) {
+  for (const path of ['/', '/overview', '/ledger', '/plans', '/plans/e4a38cd3-ec00-4589-b820-f185ae2eda17', '/targets', '/documents', '/map', '/district/2', '/district/8', '/plan/new', `/plan/${t1}`, '/rules', '/register', `/report/${new Date().getFullYear()}`]) {
     await page.goto(path);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(400);
@@ -460,4 +472,141 @@ test('about page explains input, computation and output', async ({ page }) => {
   await page.screenshot({ path: SHOTS + 'about.png', fullPage: true });
   await page.getByRole('link', { name: 'למפה' }).click();
   await expect(page).toHaveURL(/\/map$/);
+});
+
+test('ledger, plan file: documents, extraction, approval with source page, area split, boundary, targets, exports', async ({ page }) => {
+  const AP = 'e4a38cd3-ec00-4589-b820-f185ae2eda17';
+  FX.mt_documents = FX.mt_documents_plan;
+  const { writes } = await mock(page, { admin: true });
+  await page.goto('/');
+  await page.locator('.tb-nav').getByRole('link', { name: 'מאזן מימוש' }).click();
+  await expect(page).toHaveURL(/\/ledger$/);
+  const housing = page.getByTestId('city-totals').locator('tr[data-domain="housing"]');
+  await expect(housing).toContainText('1,200');
+  await expect(page.getByTestId('city-ledger').locator('[data-cell="5:housing"]')).toContainText('יתרה');
+  await expect(page.getByText('נתונים מחולצים ממתינים לאישור')).toBeVisible();
+  await expect(page.getByTestId('attention')).toContainText('מה לקדם');
+  await page.screenshot({ path: SHOTS + 'ledger.png', fullPage: true });
+  const dl = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'ייצוא לאקסל' }).click();
+  expect((await dl).suggestedFilename()).toMatch(/\.xlsx$/);
+  await page.getByRole('button', { name: 'ייצוא ל-PDF' }).click();
+  expect(await page.evaluate(() => (window as unknown as { __printed?: boolean }).__printed)).toBe(true);
+
+  // plans list and filters
+  await page.locator('.tb-nav').getByRole('link', { name: 'תכניות' }).click();
+  await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(3);
+  await page.getByRole('tab', { name: 'מאושרות' }).click();
+  await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(1);
+  await page.getByRole('tab', { name: 'בהליך' }).click();
+  await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(2);
+  await page.getByRole('tab', { name: 'הכל' }).click();
+  await page.getByRole('link', { name: '603-0900001' }).click();
+  await expect(page).toHaveURL(new RegExp(`/plans/${AP}$`));
+
+  // documents and extraction
+  await expect(page.getByTestId('extract-ready')).toHaveText('חילוץ אוטומטי זמין');
+  await expect(page.getByTestId('plan-docs')).toContainText('הוראות התכנית');
+  await expect(page.getByTestId('plan-docs')).toContainText('לא נמצא במסמך: אורך כבישים');
+  await page.getByTestId('plan-docs').getByRole('button', { name: 'חילוץ נתונים' }).click();
+  await expect.poll(() => writes.find((w) => w.table === 'fn:mt-extract')?.body).toMatchObject({ plan_id: AP, doc_id: 'doc-1' });
+  await expect(page.getByTestId('plan-msg')).toContainText('החילוץ רץ');
+  await page.getByLabel('קובץ מסמך').setInputFiles({ name: 'טבלת זכויות.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from('x') });
+  await expect(page.getByLabel('שם המסמך')).toHaveValue('טבלת זכויות');
+  await page.getByRole('button', { name: 'העלאת מסמך' }).click();
+  await expect.poll(() => writes.find((w) => w.table === 'mt_documents')?.body).toMatchObject({ name: 'טבלת זכויות', plan_id: AP });
+  expect(writes.find((w) => w.table.startsWith(`storage:object/mt-documents/plans/${AP}/`))).toBeTruthy();
+
+  // approval screen: source opens the document at the page
+  const rows = page.getByTestId('plan-approve').locator('tbody tr');
+  await expect(rows).toHaveCount(3);
+  await page.locator('tr[data-qty="q-a1"]').getByRole('button', { name: 'מקור' }).click();
+  await expect(page.getByTestId('doc-viewer').locator('iframe')).toHaveAttribute('src', /token=t#page=7$/);
+  await page.screenshot({ path: SHOTS + 'plan-approve.png', fullPage: true });
+  await page.getByTestId('doc-viewer').getByRole('button', { name: 'סגירה' }).click();
+  // area split of the unassigned draft
+  await expect(page.getByTestId('area-split')).toContainText('60%');
+  await page.locator('tr[data-qty="q-a3"]').getByRole('button', { name: 'חלוקה לפי שטח' }).click();
+  await expect.poll(() => writes.find((w) => w.method === 'PATCH' && w.table === 'mt_plan_quantities' && w.url.includes('q-a3'))?.body).toMatchObject({ district_id: 2, value: 10800, split: 'area', status: 'draft' });
+  expect(writes.find((w) => w.method === 'POST' && w.table === 'mt_plan_quantities')!.body).toMatchObject([{ district_id: 3, value: 7200, split: 'area' }]);
+  // approve all: nothing complete; then assign and approve one row
+  await page.getByRole('button', { name: 'אישור כל הטיוטות השלמות' }).click();
+  await expect(page.getByTestId('plan-msg')).toContainText('אין טיוטות שלמות');
+  await page.locator('tr[data-qty="q-a3"]').getByLabel('מתחם').selectOption('5');
+  await page.locator('tr[data-qty="q-a3"]').getByRole('button', { name: 'אישור' }).click();
+  await expect.poll(() => writes.find((w) => w.method === 'PATCH' && w.url.includes('q-a3') && (w.body as { status?: string }).status === 'approved')?.body).toMatchObject({ district_id: 5, approved_by: 'shtanat5@gmail.com' });
+  // edit an approved row returns it to draft
+  await page.locator('tr[data-qty="q-a2"]').getByLabel('כמות').fill('14');
+  await page.locator('tr[data-qty="q-a2"]').getByRole('button', { name: 'שמירה' }).click();
+  await expect.poll(() => writes.find((w) => w.method === 'PATCH' && w.url.includes('q-a2'))?.body).toMatchObject({ value: 14, status: 'draft' });
+  await page.locator('tr[data-qty="q-a2"]').getByRole('button', { name: 'מחיקה' }).click();
+  await expect.poll(() => writes.find((w) => w.method === 'DELETE' && w.url.includes('q-a2'))).toBeTruthy();
+  await page.getByRole('button', { name: 'הוספת שורה ידנית' }).click();
+  await expect.poll(() => writes.filter((w) => w.method === 'POST' && w.table === 'mt_plan_quantities').length).toBe(2);
+  await page.getByRole('button', { name: 'העתקה מטופס הבדיקה' }).click();
+  await expect.poll(() => writes.filter((w) => w.method === 'POST' && w.table === 'mt_plan_quantities').length).toBe(3);
+
+  // boundary from an ITM GeoJSON, then drawn by hand
+  const ring = [[166000, 633500], [166600, 633500], [166600, 634100], [166000, 634100], [166000, 633500]];
+  await page.getByLabel('קובץ GIS').setInputFiles({ name: 'gvul.geojson', mimeType: 'application/geo+json', buffer: Buffer.from(JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring] } }] })) });
+  await expect.poll(() => writes.find((w) => w.method === 'PATCH' && w.table === 'mt_plans')?.body).toMatchObject({ boundary_source: 'gis', area_m2: 50000 });
+  const b = (writes.find((w) => w.method === 'PATCH' && w.table === 'mt_plans')!.body as { boundary: { coordinates: number[][][] } }).boundary;
+  expect(b.coordinates[0][0][0]).toBeGreaterThan(34.6); expect(b.coordinates[0][0][1]).toBeGreaterThan(31.75);
+  await page.getByRole('button', { name: 'שרטוט גבול ידני' }).click();
+  const box = (await page.getByTestId('boundary-map').boundingBox())!;
+  for (const [x, y] of [[0.3, 0.3], [0.7, 0.3], [0.6, 0.7]]) await page.mouse.click(box.x + box.width * x, box.y + box.height * y);
+  await expect(page.getByText('3 נקודות')).toBeVisible();
+  await page.getByRole('button', { name: 'ביטול נקודה אחרונה' }).click();
+  await expect(page.getByText('2 נקודות')).toBeVisible();
+  await page.mouse.click(box.x + box.width * 0.6, box.y + box.height * 0.7);
+  await page.getByRole('button', { name: 'סיום שרטוט' }).click();
+  await expect.poll(() => writes.filter((w) => w.method === 'PATCH' && w.table === 'mt_plans').some((w) => (w.body as { boundary_source?: string }).boundary_source === 'drawn')).toBe(true);
+  await page.getByRole('button', { name: 'מחיקת הגבול' }).click();
+  await expect.poll(() => writes.some((w) => w.method === 'PATCH' && w.table === 'mt_plans' && (w.body as { boundary?: unknown }).boundary === null)).toBe(true);
+
+  // bill of quantities vs the district target
+  await expect(page.getByTestId('plan-boq').locator('tbody tr').first()).toContainText('1,200');
+  await expect(page.getByTestId('plan-boq').locator('tbody tr').first()).toContainText('15,800');
+  // plan details save
+  await page.getByLabel('תאריך אישור (מתן תוקף)').fill('2026-04-01');
+  await page.getByRole('button', { name: 'שמירת הפרטים' }).click();
+  await expect.poll(() => writes.filter((w) => w.method === 'PATCH' && w.table === 'mt_plans').some((w) => (w.body as { approval_date?: string }).approval_date === '2026-04-01')).toBe(true);
+
+  // district summary shows the plan's contribution
+  await page.goto('/district/5');
+  await expect(page.getByTestId('district-ledger').locator('thead')).toContainText('603-0900001');
+  await expect(page.getByTestId('district-ledger').locator('tr[data-domain="housing"]')).toContainText('1,200');
+  const dl2 = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'ייצוא לאקסל' }).click();
+  expect((await dl2).suggestedFilename()).toBe('ashdod-ledger-district-5.xlsx');
+
+  // targets
+  await page.goto('/targets');
+  await page.getByRole('tab', { name: 'חינוך יסודי' }).click();
+  await page.getByTestId('targets-table').getByRole('button', { name: 'עריכה' }).first().click();
+  await page.getByLabel('יעד', { exact: true }).fill('150');
+  await page.getByLabel('תאריך הקיים').fill('2026-09-01');
+  await page.getByRole('button', { name: 'שמירה' }).click();
+  await expect.poll(() => writes.find((w) => w.table === 'mt_targets')?.body).toMatchObject({ district_id: 1, domain_key: 'education', target: 150, existing_date: '2026-09-01' });
+  await page.getByLabel('שם התחום').fill('מלונאות');
+  await page.getByLabel('יחידה').fill('חדרים');
+  await page.getByRole('button', { name: 'הוספה' }).click();
+  await expect.poll(() => writes.find((w) => w.table === 'mt_domains')?.body).toMatchObject({ title: 'מלונאות', unit: 'חדרים' });
+  await expect.poll(() => (writes.filter((w) => w.table === 'mt_targets').pop()?.body as unknown[] | undefined)?.length).toBe(9);
+
+  // new plan file
+  await page.goto('/plans/new');
+  await page.getByLabel('שם').fill('תכנית בדיקה');
+  await page.getByRole('button', { name: 'פתיחת התיק' }).click();
+  await expect.poll(() => writes.find((w) => w.method === 'POST' && w.table === 'mt_plans')?.body).toMatchObject({ name: 'תכנית בדיקה', status: 'approved' });
+  delete FX.mt_documents;
+});
+
+test('ledger and plans: anonymous sees targets, not plan data', async ({ page }) => {
+  await mock(page, { admin: false });
+  await page.goto('/ledger');
+  await expect(page.getByText('תרומת התכניות פתוחה לחברי הצוות')).toBeVisible();
+  await expect(page.getByTestId('city-totals').locator('tr[data-domain="housing"]')).toContainText('לצוות');
+  await page.goto('/plans');
+  await expect(page.getByText('רשימת התכניות פתוחה לחברי הצוות')).toBeVisible();
 });
