@@ -208,6 +208,15 @@ textarea.input { min-height: 70px; resize: vertical; }
 .map-label.st-warn .s { background: var(--warn-bg); color: var(--warn); } .map-label.st-fail .s { background: var(--fail-bg); color: var(--fail); }
 .maplibregl-ctrl-attrib { font-size: 10px; }
 
+/* plan on the map */
+.map-card.plan-card { width: min(400px, calc(100% - 28px)); max-height: calc(100% - 28px); overflow-y: auto; grid-auto-rows: max-content; }
+.table.mini { font-size: 12.5px; } .table.mini td, .table.mini th { padding: 5px 6px; }
+.yeud-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12px; }
+.yeud-legend .lg-item { display: inline-flex; gap: 6px; align-items: center; }
+.lot-info { display: grid; gap: 6px; padding: 8px; border-radius: 10px; background: rgba(255,255,255,0.7); border: 1px solid var(--line); }
+
+details.lots summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+
 /* ledger (מאזן מימוש) */
 .ledger-progress { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .ledger-progress .bar { position: relative; }

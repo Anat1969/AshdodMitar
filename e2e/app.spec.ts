@@ -219,7 +219,7 @@ test('admin: top bar links, district edit, plan create + decision, rules, regist
   // district
   await page.getByTestId('district-card-2').click();
   await expect(page.getByRole('heading', { name: 'מרכז מתחדש' })).toBeVisible();
-  await expect(page.getByText('דוגמה: פינוי-בינוי')).toBeVisible();
+  await expect(page.locator('.plan-row', { hasText: 'דוגמה: פינוי-בינוי' })).toBeVisible();
   await expect(page.getByTestId('district-ledger').locator('tr[data-domain="education"]')).toContainText('208');
   await expect(page.getByTestId('district-ledger').locator('tr[data-domain="public"]')).toContainText('חסר');
   await page.getByRole('button', { name: 'עדכון אוכלוסייה קיימת' }).click();
@@ -495,9 +495,9 @@ test('ledger, plan file: documents, extraction, approval with source page, area 
 
   // plans list and filters
   await page.locator('.tb-nav').getByRole('link', { name: 'תכניות' }).click();
-  await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(3);
+  await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(4);
   await page.getByRole('tab', { name: 'מאושרות' }).click();
-  await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(1);
+  await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(2);
   await page.getByRole('tab', { name: 'בהליך' }).click();
   await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(2);
   await page.getByRole('tab', { name: 'הכל' }).click();
@@ -609,4 +609,42 @@ test('ledger and plans: anonymous sees targets, not plan data', async ({ page })
   await expect(page.getByTestId('city-totals').locator('tr[data-domain="housing"]')).toContainText('לצוות');
   await page.goto('/plans');
   await expect(page.getByText('רשימת התכניות פתוחה לחברי הצוות')).toBeVisible();
+});
+
+test('plan תמל/2022: choose a plan on the map, see its bill of quantities and lots; read the מבא"ת table in the plan file', async ({ page }) => {
+  const TML = 'a2022000-0000-4000-8000-000000002022';
+  FX.mt_documents = FX.mt_documents_tml;
+  const { writes } = await mock(page, { admin: true });
+  await page.goto('/map');
+  await page.getByLabel('בחירת תכנית').selectOption(TML);
+  await expect(page).toHaveURL(new RegExp(`plan=${TML}`));
+  const card = page.getByTestId('map-plan-card');
+  await expect(card).toContainText('תמל/2022');
+  await expect(card.getByTestId('map-plan-boq')).toContainText('2,460');
+  await expect(card.getByTestId('map-plan-boq')).toContainText('טיוטה');
+  await expect(card).toContainText('מגורים מסחר ותעסוקה');
+  // the map flew to the plan and its lots are drawn
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __map: { getZoom: () => number } }).__map.getZoom())).toBeGreaterThan(14.5);
+  await expect.poll(() => page.evaluate(() => {
+    const m = (window as unknown as { __map: { getSource: (s: string) => { _data?: { features?: unknown[] } } | undefined } }).__map;
+    return (m.getSource('plan-lots') as unknown as { serialize: () => { data: { features: unknown[] } } }).serialize().data.features.length;
+  })).toBe(37);
+  await page.screenshot({ path: SHOTS + 'map-plan.png' });
+  // the address carries the plan: opening it again selects it
+  await page.goto(`/map?plan=${TML}`);
+  await expect(page.getByTestId('map-plan-card')).toContainText('תמל/2022');
+  await page.getByTestId('map-plan-card').getByRole('link', { name: 'לתיק התכנית' }).click();
+  await expect(page).toHaveURL(new RegExp(`/plans/${TML}$`));
+  // plan file: lots table, read the rights table without AI
+  await page.getByText('תאי שטח: 37').click();
+  await expect(page.getByTestId('lots-table').locator('tbody tr')).toHaveCount(37);
+  await expect(page.getByTestId('lots-table')).toContainText('2,250');
+  await page.getByTestId('plan-docs').getByRole('button', { name: 'קריאת טבלת מבא"ת' }).click();
+  await expect.poll(() => writes.find((w) => w.method === 'POST' && w.table === 'mt_plan_quantities')?.body as { domain_key: string; value: number }[] | undefined).toEqual(expect.arrayContaining([expect.objectContaining({ domain_key: 'housing', value: 2460, district_id: 2, origin: 'mavat', status: 'draft' })]));
+  await expect(page.getByTestId('plan-msg')).toContainText('ממתינות לאישור');
+  await expect.poll(() => writes.some((w) => w.method === 'PATCH' && w.table === 'mt_plans' && !!(w.body as { lots?: unknown }).lots)).toBe(true);
+  await page.getByRole('link', { name: 'במפה' }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/map\\?plan=${TML}`));
+  await page.screenshot({ path: SHOTS + 'plan-tml.png', fullPage: true });
+  delete FX.mt_documents;
 });

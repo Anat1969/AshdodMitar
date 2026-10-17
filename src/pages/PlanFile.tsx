@@ -6,7 +6,9 @@ import { useAuth } from '../lib/auth';
 import { SUPABASE_KEY, SUPABASE_URL, supabase } from '../lib/supabase';
 import { fmt, PLAN_STATUS_LABEL, type Plan } from '../lib/data';
 import { BUCKET_LABEL, planBoq, planBucket, splitByArea, type Quantity } from '../lib/ledger';
-import { boundaryFromFile, insideAshdod } from '../lib/gis';
+import { insideAshdod, planFromFile } from '../lib/gis';
+import { docBlob, docUrl } from '../lib/docfile';
+import { isAreasTable, isRightsTable, parseAreasTable, parseRightsTable, quantitiesFromAreas, quantitiesFromRights, lotsCollection, yeudColor, type Lot } from '../lib/mavat';
 import BoundaryMap from '../components/BoundaryMap';
 import { pctText } from '../components/ledger';
 import { Loading, Page } from '../components/ui';
@@ -53,7 +55,7 @@ export default function PlanFilePage() {
 
   return (
     <Page kicker={isNew ? 'תכנית חדשה' : `תיק תכנית ${plan?.plan_number ?? ''}`} title={isNew ? 'פתיחת תיק תכנית' : plan!.name}
-      actions={!isNew && <><Link className="btn" to={`/plan/${plan!.id}`}>בדיקת כללי מדיניות</Link><Link className="btn" to="/ledger">מאזן מימוש</Link></>}>
+      actions={!isNew && <><Link className="btn primary" to={`/map?plan=${plan!.id}`}>במפה</Link><Link className="btn" to={`/plan/${plan!.id}`}>בדיקת כללי מדיניות</Link><Link className="btn" to="/ledger">מאזן מימוש</Link></>}>
       <section className="card" data-testid="plan-head">
         <div className="card-head"><h2>1. פרטי התכנית</h2>{plan && <span className="chip st-info">{BUCKET_LABEL[planBucket(plan, null)]}</span>}</div>
         <div className="form-grid">
@@ -146,9 +148,7 @@ function PlanBody({ plan }: { plan: Plan }) {
   };
 
   const open = async (d: Doc, page: number | null = null) => {
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(d.file_path, 300);
-    if (error || !data) { setMsg(`לא ניתן לפתוח: ${error?.message}`); return; }
-    setViewer({ doc: d, url: data.signedUrl, page });
+    try { setViewer({ doc: d, url: await docUrl(d.file_path), page }); } catch (e) { setMsg(`לא ניתן לפתוח: ${(e as Error).message}`); }
   };
 
   const extract = async (d: Doc) => {
@@ -162,24 +162,44 @@ function PlanBody({ plan }: { plan: Plan }) {
     setMsg('החילוץ רץ. מסמך ארוך לוקח כמה דקות. הנתונים יופיעו כטיוטה לאישור.'); await load();
   };
 
-  const setBoundary = async (b: NonNullable<Plan['boundary']>, source: 'gis' | 'drawn') => {
+  const setBoundary = async (b: NonNullable<Plan['boundary']>, source: 'gis' | 'drawn', lots?: GeoJSON.FeatureCollection | null) => {
     if (!insideAshdod(b)) setMsg('הגבול נטען, אבל אינו נמצא באזור אשדוד. לבדוק את מערכת הקואורדינטות של הקובץ.');
     const r = await area(b);
-    const { error } = await supabase.from('mt_plans').update({ boundary: b, boundary_source: source, area_m2: r?.area_m2 ?? null }).eq('id', plan.id);
+    const { error } = await supabase.from('mt_plans').update({ boundary: b, boundary_source: source, area_m2: r?.area_m2 ?? null, ...(lots ? { lots } : {}) }).eq('id', plan.id);
     if (error) { setMsg(`שגיאה בשמירת הגבול: ${error.message}`); return; }
     if (insideAshdod(b)) setMsg(source === 'drawn' ? 'הגבול שורטט ונשמר' : 'הגבול נטען מהקובץ ונשמר');
     refresh();
   };
   const onGisFile = async (f: File | undefined) => {
     if (!f) return;
-    try { const b = await boundaryFromFile(f); await setBoundary(b, 'gis'); await upload(f, `גבול: ${f.name}`, today()); await load(); }
+    try { const p = await planFromFile(f); await setBoundary(p.boundary, 'gis', p.lots && lotsCollection(p.lots, [])); await upload(f, `גבול: ${f.name}`, today()); await load(); }
     catch (e) { setMsg(`קובץ הגבול לא נקרא: ${(e as Error).message}`); }
   };
   const gisFromDoc = async (d: Doc) => {
-    const { data, error } = await supabase.storage.from(BUCKET).download(d.file_path);
-    if (error || !data) { setMsg(`לא ניתן להוריד: ${error?.message}`); return; }
-    try { await setBoundary(await boundaryFromFile(new File([data], d.file_name ?? 'boundary.geojson')), 'gis'); } catch (e) { setMsg(`קובץ הגבול לא נקרא: ${(e as Error).message}`); }
+    try {
+      const p = await planFromFile(new File([await docBlob(d.file_path)], d.file_name ?? 'boundary.geojson'));
+      await setBoundary(p.boundary, 'gis', p.lots && lotsCollection(p.lots, (plan.lots?.features ?? []).flatMap((f) => ((f.properties as unknown as Lot | null)?.rights ?? []).map((r) => ({ ...r, lot: String(f.properties?.lot), yeud: String(f.properties?.yeud) })))));
+    } catch (e) { setMsg(`קובץ הגבול לא נקרא: ${(e as Error).message}`); }
   };
+  // מבא"ת tables (.xls exported as HTML) are read here, without AI; rows become drafts with their source
+  const readMavat = async (d: Doc) => {
+    try {
+      const html = (await (await docBlob(d.file_path)).text()).replace(/^\uFEFF/, '');
+      const rights = isRightsTable(html) ? parseRightsTable(html) : [];
+      const drafts = rights.length ? quantitiesFromRights(rights) : isAreasTable(html) ? quantitiesFromAreas(parseAreasTable(html)) : [];
+      if (!drafts.length) { setMsg('הקובץ אינו טבלת זכויות או טבלת שטחים של מבא"ת'); return; }
+      const district = plan.district_id ?? (parts?.length === 1 ? parts[0].district_id : null);
+      const { error } = await supabase.from('mt_plan_quantities').insert(drafts.map((x) => ({ plan_id: plan.id, district_id: district, domain_key: x.domain_key, value: x.value, doc_id: d.id, quote: x.quote, note: x.note, split: 'single', status: 'draft', origin: 'mavat', created_by: session?.user.email ?? null })));
+      if (error) { setMsg(`שגיאה: ${error.message}`); return; }
+      // the rights of each lot also go to the lots shown on the map
+      if (rights.length && plan.lots?.features?.length) {
+        const fc = { type: 'FeatureCollection' as const, features: plan.lots.features.map((f) => ({ ...f, properties: { NUM: f.properties?.lot, MAVAT_NAME: f.properties?.yeud, SHAPE_AREA: f.properties?.areaM2 } })) };
+        await supabase.from('mt_plans').update({ lots: lotsCollection(fc, rights) }).eq('id', plan.id);
+      }
+      setMsg(`נקראו ${drafts.length} שורות מהטבלה. הן ממתינות לאישור`); refresh();
+    } catch (e) { setMsg(`הקובץ לא נקרא: ${(e as Error).message}`); }
+  };
+
   const clearBoundary = async () => {
     await supabase.from('mt_plans').update({ boundary: null, boundary_source: null, area_m2: null }).eq('id', plan.id);
     setParts(null); refresh();
@@ -241,6 +261,7 @@ function PlanBody({ plan }: { plan: Plan }) {
                       {x?.result?.missing?.length ? <div className="ls">לא נמצא במסמך: {x.result.missing.join('; ')}</div> : null}</td>
                     <td><div className="row-actions">
                       <button type="button" className="btn small" onClick={() => open(d)}>פתיחה</button>
+                      {canWrite && /\.(xls|html?)$/i.test(d.file_name ?? '') && <button type="button" className="btn small primary" onClick={() => readMavat(d)}>קריאת טבלת מבא"ת</button>}
                       {canWrite && isReadable(d) && <button type="button" className="btn small primary" disabled={!ready || running} title={ready ? '' : 'ממתין למפתח Claude API'} onClick={() => extract(d)}>חילוץ נתונים</button>}
                       {canWrite && isGis(d) && <button type="button" className="btn small" onClick={() => gisFromDoc(d)}>טעינת גבול מהקובץ</button>}
                     </div></td>
@@ -296,7 +317,8 @@ function PlanBody({ plan }: { plan: Plan }) {
             {plan.boundary && <button type="button" className="btn small ghost" onClick={clearBoundary}>מחיקת הגבול</button>}
           </div>}</div>
         <div className="ls">GeoJSON, KML או Shapefile בתוך ZIP. קואורדינטות ברשת ישראל החדשה (ITM) מומרות אוטומטית. בלי קובץ: שרטוט ידני על המפה.</div>
-        <BoundaryMap boundary={plan.boundary} districts={districts} canDraw={canWrite} onDrawn={(b) => setBoundary(b, 'drawn')} />
+        <BoundaryMap boundary={plan.boundary} lots={plan.lots ?? null} districts={districts} canDraw={canWrite} onDrawn={(b) => setBoundary(b, 'drawn')} />
+        {plan.lots?.features?.length ? <LotsTable lots={plan.lots} /> : null}
         {parts && (
           <div className="table-wrap">
             <table className="table" data-testid="area-split">
@@ -385,5 +407,27 @@ function PlanBoqTable({ plan, quantities }: { plan: Plan; quantities: Quantity[]
       </div>
       <div className="ls">{bucket === 'approved' ? 'התכנית מאושרת: הנתונים המאושרים נכנסים לסה"כ המתחם.' : bucket === 'scenario' ? 'התכנית בהליך: הנתונים נכנסים לתרחיש בלבד, לא לסה"כ.' : 'התכנית אינה נספרת במאזן (רעיון או נדחתה).'} "יתרה לפני התכנית": מה היה חסר במתחם בלי התכנית הזו.</div>
     </>
+  );
+}
+
+function LotsTable({ lots }: { lots: GeoJSON.FeatureCollection }) {
+  const rows = lots.features.map((f) => f.properties as unknown as Lot).filter(Boolean).sort((a, b) => a.lot.localeCompare(b.lot, 'he', { numeric: true }));
+  return (
+    <details className="lots">
+      <summary>תאי שטח: {rows.length}. ייעוד, שטח וזכויות לפי טבלה 5</summary>
+      <div className="table-wrap">
+        <table className="table mini" data-testid="lots-table">
+          <thead><tr><th>תא שטח</th><th>ייעוד</th><th>שטח, מ"ר</th><th>שימושים וזכויות</th></tr></thead>
+          <tbody>{rows.map((l) => (
+            <tr key={l.lot}>
+              <td className="mono">{l.lot}</td>
+              <td><span className="sw" style={{ background: yeudColor(l.yeud), display: 'inline-block', marginInlineEnd: 6 }} />{l.yeud}</td>
+              <td className="mono">{fmt(l.areaM2)}</td>
+              <td className="ls">{(l.rights ?? []).map((r) => `${r.use || 'כללי'} ${fmt(r.builtM2)} מ"ר${r.units ? `, ${r.units} יח"ד` : ''}`).join('; ') || 'ללא זכויות בנייה'}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </details>
   );
 }

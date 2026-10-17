@@ -154,3 +154,8 @@ create table mt_extractions (
 -- Seed: mt_targets from mt_districts (plan tables, ch. 4.3): housing target=units_total, existing=units_total-units_added (derived);
 --   education/kinder from target_pop (assumption) with existing from mt_existing; openspace 3 m2/person; employment=employment_m2.
 -- Edge function mt-extract (supabase/functions/mt-extract): Claude API (claude-opus-5-5), needs secret ANTHROPIC_API_KEY.
+-- Plan lots and מבא"ת (added 2026-10-17)
+alter table mt_plans add column lots jsonb, add column mavat_number text;   -- lots: FeatureCollection {lot, yeud, areaM2, rights[]}
+-- mt_plan_quantities.origin also allows 'mavat' (rows read from מבא"ת tables, always draft)
+-- mt_documents.file_path 'public:/plans/...' = a public file served by the app (public/plans)
+-- Plan תמל/2022 seeded from public/plans/tml-2022/seed.json via http_get of the repository raw file.

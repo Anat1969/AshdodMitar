@@ -5,10 +5,11 @@ import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
 import { EMPTY_STYLE, loadBaseStyle } from '../lib/basemaps';
 import { bboxOf } from '../lib/gis';
 import type { District } from '../lib/data';
+import { yeudColor } from '../lib/mavat';
 
 type Boundary = GeoJSON.Polygon | GeoJSON.MultiPolygon;
 
-export default function BoundaryMap({ boundary, districts, canDraw, onDrawn }: { boundary: Boundary | null; districts: District[]; canDraw: boolean; onDrawn: (b: Boundary) => void }) {
+export default function BoundaryMap({ boundary, lots = null, districts, canDraw, onDrawn }: { boundary: Boundary | null; lots?: GeoJSON.FeatureCollection | null; districts: District[]; canDraw: boolean; onDrawn: (b: Boundary) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const [ok, setOk] = useState(0);
@@ -24,9 +25,11 @@ export default function BoundaryMap({ boundary, districts, canDraw, onDrawn }: {
     const add = () => {
       if (map.getSource('districts')) return;
       const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
-      for (const s of ['districts', 'plan', 'draft']) map.addSource(s, { type: 'geojson', data: empty });
+      for (const s of ['districts', 'lots', 'plan', 'draft']) map.addSource(s, { type: 'geojson', data: empty });
       map.addLayer({ id: 'districts-line', type: 'line', source: 'districts', paint: { 'line-color': '#2b3038', 'line-width': 1.4, 'line-dasharray': [3, 2] } });
-      map.addLayer({ id: 'plan-fill', type: 'fill', source: 'plan', paint: { 'fill-color': '#4f7a63', 'fill-opacity': 0.35 } });
+      map.addLayer({ id: 'lots-fill', type: 'fill', source: 'lots', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.75 } });
+      map.addLayer({ id: 'lots-line', type: 'line', source: 'lots', paint: { 'line-color': '#15181d', 'line-width': 0.7 } });
+      map.addLayer({ id: 'plan-fill', type: 'fill', source: 'plan', paint: { 'fill-color': '#4f7a63', 'fill-opacity': ['case', ['==', ['get', 'hasLots'], 1], 0, 0.35] } });
       map.addLayer({ id: 'plan-line', type: 'line', source: 'plan', paint: { 'line-color': '#1f3b2c', 'line-width': 2.6 } });
       map.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#b7832a', 'line-width': 2.4 } });
       map.addLayer({ id: 'draft-pts', type: 'circle', source: 'draft', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 4.5, 'circle-color': '#fff', 'circle-stroke-color': '#b7832a', 'circle-stroke-width': 2 } });
@@ -43,9 +46,10 @@ export default function BoundaryMap({ boundary, districts, canDraw, onDrawn }: {
   useEffect(() => {
     const map = mapRef.current; if (!map || !map.getSource('districts')) return;
     (map.getSource('districts') as GeoJSONSource).setData({ type: 'FeatureCollection', features: districts.filter((d) => d.geom).map((d) => ({ type: 'Feature', geometry: d.geom!, properties: { id: d.id } })) });
-    (map.getSource('plan') as GeoJSONSource).setData(boundary ? { type: 'Feature', geometry: boundary, properties: {} } : { type: 'FeatureCollection', features: [] });
+    (map.getSource('plan') as GeoJSONSource).setData(boundary ? { type: 'Feature', geometry: boundary, properties: { hasLots: lots?.features.length ? 1 : 0 } } : { type: 'FeatureCollection', features: [] });
+    (map.getSource('lots') as GeoJSONSource).setData({ type: 'FeatureCollection', features: (lots?.features ?? []).map((f) => ({ ...f, properties: { ...f.properties, color: yeudColor(String(f.properties?.yeud ?? '')) } })) });
     if (boundary) { const b = bboxOf(boundary); map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 50, maxZoom: 16, duration: 0 }); }
-  }, [ok, boundary, districts]);
+  }, [ok, boundary, districts, lots]);
 
   useEffect(() => {
     const map = mapRef.current; if (!map || !map.getSource('draft')) return;
