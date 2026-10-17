@@ -93,7 +93,7 @@ test.afterEach(() => { expect(errors, errors.join('\n')).toEqual([]); });
 
 test('anonymous: home, map layers, district card, no members data', async ({ page }) => {
   const { reads } = await mock(page, { admin: false });
-  await page.goto('/');
+  await page.goto('/overview');
   await expect(page.getByRole('heading', { name: 'כל תכנית היא דלתא בתאום העיר' })).toBeVisible();
   await expect(page.locator('[data-testid^="district-card-"]')).toHaveCount(9);
   await expect(page.locator('.maplibregl-canvas')).toBeVisible();
@@ -186,7 +186,7 @@ test('map page: every layer toggle, themes, district selection, copy link', asyn
 
 test('admin: top bar links, district edit, plan create + decision, rules, register, report', async ({ page }) => {
   const { writes } = await mock(page, { admin: true });
-  await page.goto('/');
+  await page.goto('/overview');
   await expect(page.locator('.sys-btn')).toContainText('מנהלת');
   await page.locator('.sys-btn').click();
   await expect(page.getByRole('button', { name: 'התקנת האפליקציה' })).toBeVisible();
@@ -200,6 +200,9 @@ test('admin: top bar links, district edit, plan create + decision, rules, regist
   await expect(page).toHaveURL(/\/map/);
   await page.getByRole('link', { name: 'דף הבית' }).click();
   await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: 'קלט, חישוב ופלט' })).toBeVisible();
+  await page.locator('.tb-nav').getByRole('link', { name: 'תמונת העיר' }).click();
+  await expect(page).toHaveURL(/\/overview$/);
 
   // district
   await page.getByTestId('district-card-2').click();
@@ -339,7 +342,7 @@ test('mobile: no horizontal scroll on every page', async ({ browser }) => {
   page.on('pageerror', (e) => errors.push(e.message));
   await mock(page, { admin: true });
   const t1 = (FX.mt_plans as { id: string }[])[0].id;
-  for (const path of ['/about', '/documents', '/', '/map', '/district/2', '/district/8', '/plan/new', `/plan/${t1}`, '/rules', '/register', `/report/${new Date().getFullYear()}`]) {
+  for (const path of ['/', '/overview', '/documents', '/map', '/district/2', '/district/8', '/plan/new', `/plan/${t1}`, '/rules', '/register', `/report/${new Date().getFullYear()}`]) {
     await page.goto(path);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(400);
@@ -448,9 +451,10 @@ test('sign-in by pasting the emailed link or the dead-end address, then a clear 
 test('about page explains input, computation and output', async ({ page }) => {
   await mock(page, { admin: false });
   await page.goto('/');
-  await page.getByRole('link', { name: 'איך זה עובד' }).first().click();
-  await expect(page).toHaveURL(/\/about$/);
+  // the opening page is "how it works", and it is the first item in the top navigation
   await expect(page.getByRole('heading', { name: 'קלט, חישוב ופלט' })).toBeVisible();
+  await expect(page.locator('.tb-nav a').first()).toHaveText('איך זה עובד');
+  await expect(page.locator('.tb-nav a').first()).toHaveClass(/active/);
   for (const t of ['1. קלט', '2. חישוב', '3. פלט']) await expect(page.getByText(t)).toBeVisible();
   await expect(page.locator('table').first().locator('tbody tr')).toHaveCount(8);
   await page.screenshot({ path: SHOTS + 'about.png', fullPage: true });

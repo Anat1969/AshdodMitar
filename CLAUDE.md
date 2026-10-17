@@ -31,7 +31,7 @@ Read first: `docs/SPEC.md`, `docs/RULES.md`, `data/districts.json`, `reference/r
 
 ## Fixed UI components
 - Fixed top bar on every page (drawers open below it): app name links home, content navigation, and on the left ONE button "מערכת" that opens a panel with all technical buttons: "העתקת קישור" (copies current state incl. district, layers, theme, background), "שיחת הפיתוח", "פרויקט המחקר", "התקנת האפליקציה", and account (sign-in / sign-out).
-- Real home page that maps the content (city gauge + district map).
+- Opening page `/` = "איך זה עובד" (input, computation, output, topics, sources, what is missing), first item in the top nav; the app name links to it. City overview (gauge, topics, district map) is `/overview` ("תמונת העיר"), second in the nav.
 
 ## Design language
 Architectural, minimal, greys, depth (shadows, layers, gradients, subtle motion), never flat. IBM Plex Sans Hebrew (thin only at large headings), IBM Plex Mono for labels and numbers. Meaningful colors kept: gate status (pass / near / over / missing) must be distinguishable without color too (text label). Body text contrast ≥ 4.5:1.
@@ -62,6 +62,9 @@ Commit and push. If a work branch is required: PR, then merge to `main` immediat
 ## Documents
 - `/documents`: upload any file type (up to 50MB) with name, document date, optional district/plan and note. Table `mt_documents`, private storage bucket `mt-documents`, opened via 5-minute signed URLs. Read: members. Write/delete: editor/admin.
 
+## Verified fixes (do not regress)
+The full registry, with symptom, fix and verification, is in `skills/end-to-end-builder/SKILL.md`, section "רישום תיקונים שאומתו". Every fix that Anat requested and that was verified is added there, here (corrections log), and as an automated test, in the same round of work.
+
 ## Known pitfalls
 - RTL horizontal scroll: top grid `grid-template-columns:minmax(0,1fr)`, `min-width:0` on button rows; motion wrappers in flex rows need `flex:0 0 auto`.
 - Grid item with `overflow:hidden` inside a scroll container collapses: use `grid-auto-rows:max-content`.
@@ -85,3 +88,6 @@ Final URL + one line on what was built. Update this file.
 - 2026-10-16: the markings did not line up with the map. Fixed with official municipal quarter polygons and a background fallback.
 - 2026-10-16: explain input and output (`/about`, plan page note). Goal: per topic show existing vs planned, maps update toward the target, every plan decomposes into a bill of quantities.
 - 2026-10-16: the emailed sign-in link did not open (it went to localhost:3000). Sign-in must actually work, and Anat must clearly see that she is connected. Saved in the skill.
+- 2026-10-17: blank streets map on production: Hebrew RTL plugin off by default (verified with a live screenshot).
+- 2026-10-17: "איך זה עובד" is the opening page and first in the nav.
+- 2026-10-17: every verified fix is saved in the skill, in this file and as a test, so it never comes back.
