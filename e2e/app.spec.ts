@@ -151,7 +151,7 @@ test('map page: every layer toggle, themes, district selection, copy link', asyn
     await expect(page.locator('.map-label')).toHaveCount(9);
   }
   const labelField = await page.evaluate(() => JSON.stringify((window as unknown as { __map: { getLayoutProperty: (l: string, p: string) => unknown } }).__map.getLayoutProperty('ofm-label', 'text-field')));
-  expect(labelField).toContain('name:he');
+  expect(labelField).toContain('name:latin');
   await page.locator('button[data-base="sat"]').click();
   await expect.poll(srcs).toContain('esri');
   await page.locator('.map-label[data-district="2"]').click();

@@ -8,7 +8,7 @@ import maplibregl, { type StyleSpecification } from 'maplibre-gl';
 // plain: CARTO light raster (also the fallback when OpenFreeMap is unreachable).
 export type BaseKey = 'streets' | 'sat' | 'plain';
 export const BASEMAPS: { key: BaseKey; title: string; source: string }[] = [
-  { key: 'streets', title: 'רחובות ומבנים', source: 'OpenFreeMap, OpenMapTiles, נתוני OpenStreetMap' },
+  { key: 'streets', title: 'רחובות ומבנים', source: 'OpenFreeMap, OpenMapTiles, נתוני OpenStreetMap. שמות הרחובות ברקע באותיות לטיניות' },
   { key: 'sat', title: 'תצלום אוויר', source: 'Esri World Imagery' },
   { key: 'plain', title: 'רקע שקט', source: 'CARTO, נתוני OpenStreetMap' },
 ];
@@ -16,7 +16,8 @@ export const BASEMAPS: { key: BaseKey; title: string; source: string }[] = [
 let rtlRequested = false;
 export function ensureRtlPlugin() {
   if (rtlRequested) return;
-  if (new URLSearchParams(window.location.search).get('rtl') === '0') return;
+  // Opt-in only (?rtl=1): on production the plugin blanked the map canvas (both 0.2.3 and 0.3.0).
+  if (new URLSearchParams(window.location.search).get('rtl') !== '1') return;
   rtlRequested = true;
   try {
     if (maplibregl.getRTLTextPluginStatus() === 'unavailable') void maplibregl.setRTLTextPlugin(new URL('/vendor/mapbox-gl-rtl-text-0.2.3.min.js', window.location.origin).href, true);
@@ -40,7 +41,11 @@ export const PLAIN_STYLE = raster('carto', ['https://a.basemaps.cartocdn.com/lig
 export const SAT_STYLE = raster('esri', ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
   'Imagery © Esri, Maxar, Earthstar Geographics', { 'raster-saturation': -0.15 }, 19);
 
-const HE_NAME = ['coalesce', ['get', 'name:he'], ['get', 'name'], ['get', 'name_en']];
+// Without the RTL plugin Hebrew would render reversed, so background labels use Latin names (OpenMapTiles has name:latin for every feature).
+// Hebrew names that matter (quarters, districts) come from our own HTML labels.
+const LABEL_NAME = () => (new URLSearchParams(window.location.search).get('rtl') === '1'
+  ? ['coalesce', ['get', 'name:he'], ['get', 'name'], ['get', 'name_en']]
+  : ['coalesce', ['get', 'name:en'], ['get', 'name_en'], ['get', 'name:latin']]);
 const cache = new Map<BaseKey, StyleSpecification>();
 
 async function fetchJson(url: string, ms: number) {
@@ -62,7 +67,7 @@ export async function loadBaseStyle(key: BaseKey): Promise<{ style: StyleSpecifi
     const s = (await fetchJson('https://tiles.openfreemap.org/styles/positron', 7000)) as StyleSpecification;
     for (const l of s.layers) {
       const layout = (l as { layout?: Record<string, unknown> }).layout;
-      if (layout && 'text-field' in layout && JSON.stringify(layout['text-field']).includes('name')) layout['text-field'] = HE_NAME;
+      if (layout && 'text-field' in layout && JSON.stringify(layout['text-field']).includes('name')) layout['text-field'] = LABEL_NAME();
     }
     for (const src of Object.values(s.sources)) {
       const v = src as { type: string; attribution?: string };
