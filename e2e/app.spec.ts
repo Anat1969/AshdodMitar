@@ -498,7 +498,7 @@ test('ledger, plan file: documents, extraction, approval with source page, area 
   await viaTools(page, 'מאזן מימוש');
   await expect(page).toHaveURL(/\/ledger$/);
   const housing = page.getByTestId('city-totals').locator('tr[data-domain="housing"]');
-  await expect(housing).toContainText('1,200');
+  await expect(housing).toContainText('4,744');
   await expect(page.getByTestId('city-ledger').locator('[data-cell="5:housing"]')).toContainText('יתרה');
   await expect(page.getByText('נתונים מחולצים ממתינים לאישור')).toBeVisible();
   await expect(page.getByTestId('attention')).toContainText('מה לקדם');
@@ -513,9 +513,9 @@ test('ledger, plan file: documents, extraction, approval with source page, area 
   await viaTools(page, 'תיקי תכניות');
   await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(5);
   await page.getByRole('tab', { name: 'מאושרות' }).click();
-  await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(2);
-  await page.getByRole('tab', { name: 'בהליך' }).click();
   await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(3);
+  await page.getByRole('tab', { name: 'בהליך' }).click();
+  await expect(page.getByTestId('plans-table').locator('tbody tr')).toHaveCount(2);
   await page.getByRole('tab', { name: 'הכל' }).click();
   await page.getByRole('link', { name: '603-0900001' }).click();
   await expect(page).toHaveURL(new RegExp(`/plans/${AP}$`));
@@ -676,11 +676,32 @@ test('simple flow: home, map with search, plan page with layers, 3D, drawing and
   await expect(page.locator('.tb-nav a')).toHaveText(['בית', 'מפה', 'הוספת תכנית', 'השוואה ליעד', 'כלים נוספים']);
   const card = page.getByTestId('start-card');
   await expect(card).toContainText('יעד תוספת יח"ד');
-  await expect(card.locator('.s-approved')).toContainText('1,200');
+  await expect(card.locator('.s-approved')).toContainText('4,744');
   await expect(page.getByTestId('city-gap').locator('.gap-row')).toHaveCount(8);
   await expect(page.getByTestId('city-gap').locator('.gap-row[data-domain="housing"]')).toContainText('נשאר');
+  // each plan's share of the whole, and the plan opens in a panel on the same page
+  await expect(page.getByTestId('city-gap').locator('.gap-row[data-domain="housing"] .gp', { hasText: '603-0811588' })).toContainText('מהשלם');
+  await page.getByTestId('city-gap').locator('.gap-row[data-domain="housing"] .gp', { hasText: '603-0811588' }).click();
+  await expect(page).toHaveURL(/\/\?peek=plan%3A603-0811588$/);
+  await expect(page.getByTestId('peek-plan')).toContainText('החלק של התכנית ביעד');
+  await expect(page.getByTestId('peek-shares')).toContainText('3,544 מתוך');
+  await page.getByTestId('peek').getByRole('button', { name: 'סגירה' }).click();
+  await expect(page.getByTestId('peek')).toHaveCount(0);
+  // what is left per district after the approved plans, and the city whole
+  const rm = page.getByTestId('remaining-map');
+  await expect(rm.getByTestId('city-whole')).toContainText('השלם העירוני');
+  await expect(rm.locator('.rm-label.rm-d')).toHaveCount(9);
+  await expect(rm.locator('.rm-label.rm-d', { hasText: /^7/ })).toContainText('מתוך');
+  await rm.locator('.rm-label.rm-d').first().dispatchEvent('click');
+  await expect(page.getByTestId('peek-district')).toBeVisible();
+  await expect(page).toHaveURL(/peek=district/);
+  await page.getByTestId('peek').getByRole('button', { name: 'סגירה' }).click();
+  await rm.getByRole('tab', { name: 'רובעים' }).click();
+  await expect(rm.locator('.rm-label.rm-q.has')).not.toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => { const m = (window as unknown as { __remmap: { getSource: (s: string) => { serialize: () => { data: { features: unknown[] } } } } }).__remmap; return m.getSource('q')?.serialize().data.features.length; })).toBe(35);
+  await expect.poll(() => page.evaluate(() => { const m = (window as unknown as { __remmap: { getLayer: (l: string) => unknown; getPaintProperty: (l: string, p: string) => string } }).__remmap; return m.getLayer('p-line') ? m.getPaintProperty('p-line', 'line-color') : null; })).toBe('#1d4ed8');
   await page.screenshot({ path: SHOTS + 'start.png', fullPage: true });
-  await card.getByRole('link', { name: 'למפה' }).click();
+  await page.locator('.tb-nav').getByRole('link', { name: 'מפה' }).click();
 
   // 2. map: blue lines by status, search
   await expect(page).toHaveURL(/\/map$/);
@@ -689,10 +710,16 @@ test('simple flow: home, map with search, plan page with layers, 3D, drawing and
   await expect(page.getByTestId('plans-list').locator('li')).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => { const m = (window as unknown as { __plansmap: { getSource: (s: string) => { serialize: () => { data: { features: unknown[] } } } } }).__plansmap; return m.getSource('plans')?.serialize().data.features.length; })).toBe(1);
   await page.screenshot({ path: SHOTS + 'plans-map.png' });
-  await page.getByTestId('plans-list').getByRole('link').first().click();
+  // blue only for the blue line: status by line style
+  await expect.poll(() => page.evaluate(() => { const m = (window as unknown as { __plansmap: { getLayer: (l: string) => unknown; getPaintProperty: (l: string, p: string) => string } }).__plansmap; return m.getLayer('plans-line') ? m.getPaintProperty('plans-line', 'line-color') : null; })).toBe('#1d4ed8');
+  await page.getByTestId('plans-list').getByRole('button').first().click();
+  await expect(page).toHaveURL(/\/map\?q=0811588&peek=plan%3A603-0811588$/);
+  await expect(page.getByTestId('peek-plan')).toContainText('603-0811588');
+  await page.getByTestId('peek').getByRole('link', { name: /לדף התכנית/ }).click();
 
   // 3. plan page: layers, 3D, data card, sources
   await expect(page).toHaveURL(/\/plan\/603-0811588$/);
+  await expect(page.getByTestId('peek')).toHaveCount(0);
   const layers = page.getByTestId('layer-list');
   await expect(layers).toContainText('קו כחול');
   await expect(layers).toContainText('מבנים מוצעים');
@@ -704,10 +731,21 @@ test('simple flow: home, map with search, plan page with layers, 3D, drawing and
   await expect(gap).toContainText('מה צריך במתחם 7');
   await expect(gap.locator('.gap-row[data-domain="housing"] .gp-this')).toContainText('603-0811588');
   await expect(gap.locator('.gap-row[data-domain="education"] .gp-demand')).toContainText('ביקוש חדש');
-  await expect(page.getByTestId('plan-status')).toHaveText('בהכנה');
+  await expect(page.getByTestId('plan-status')).toHaveText('מאושרת');
+  // nothing exists in this quarter: no existing-buildings layer, net = all proposed
+  await expect(layers).not.toContainText('מבנים קיימים');
+  await expect(page.getByTestId('plan-facts').locator('.kv-row', { hasText: 'יח"ד קיימות' })).toContainText('0');
   await page.getByRole('tab', { name: 'תלת-ממד' }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __pmap: { getPitch: () => number } }).__pmap.getPitch())).toBeGreaterThan(50);
   await expect.poll(() => page.evaluate(() => (window as unknown as { __pmap: { getLayoutProperty: (l: string, p: string) => string } }).__pmap.getLayoutProperty('proposed-3d', 'visibility'))).toBe('visible');
+  // the volume is cut into floors (more slabs than volumes); the envelope and the volume toggle apart; orbit turns the camera
+  await page.getByRole('button', { name: 'מעטפת מותרת' }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __pmap: { getLayoutProperty: (l: string, p: string) => string } }).__pmap.getLayoutProperty('proposed-env-3d', 'visibility'))).toBe('none');
+  await page.getByRole('button', { name: 'מעטפת מותרת' }).click();
+  const b0 = await page.evaluate(() => (window as unknown as { __pmap: { getBearing: () => number } }).__pmap.getBearing());
+  await page.getByRole('button', { name: 'סיבוב סביב התכנית' }).click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __pmap: { getBearing: () => number } }).__pmap.getBearing())).not.toBeCloseTo(b0, 0);
+  await page.getByRole('button', { name: 'עצירת הסיבוב' }).click();
   await page.screenshot({ path: SHOTS + 'plan-3d.png' });
   await layers.locator('input[data-layer="proposed"]').uncheck();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __pmap: { getLayoutProperty: (l: string, p: string) => string } }).__pmap.getLayoutProperty('proposed-3d', 'visibility'))).toBe('none');
@@ -735,20 +773,24 @@ test('simple flow: home, map with search, plan page with layers, 3D, drawing and
   // TML: exact layers from the SHP, approximate massing
   await page.goto('/plan/603-0380584');
   await expect(layers.locator('li', { hasText: 'קווי בניין' })).toContainText('מקור מדויק');
+  // every map layer was accepted by MapLibre (a per-feature dash pattern is rejected silently in v4)
+  await expect.poll(() => page.evaluate(() => { const m = (window as unknown as { __pmap: { getLayer: (l: string) => unknown } }).__pmap; return ['blue_line', 'land_use-fill', 'building_lines', 'building_lines-under', 'demolish-line', 'proposed-line', 'proposed-env-line', 'proposed-env-3d', 'proposed-3d', 'existing-3d'].filter((l) => !m.getLayer(l)); })).toEqual([]);
   await expect(layers.locator('li', { hasText: 'מבנים להריסה' })).toContainText('מקור מדויק');
   await expect(layers.locator('li', { hasText: 'מבנים מוצעים' })).toContainText('קירוב');
   await expect(page.getByTestId('plan-sources')).toContainText('טבלה 5');
   await page.getByRole('tab', { name: 'תלת-ממד' }).click();
+  // the volumes are cut into floors: 27 volumes up to 31 floors become hundreds of slabs
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __pmap: { getSource: (s: string) => { serialize: () => { data: { features: unknown[] } } } } }).__pmap.getSource('proposed-slabs').serialize().data.features.length)).toBeGreaterThan(100);
   await page.screenshot({ path: SHOTS + 'plan-tml-3d.png' });
 
   // approve the TML net housing in the plan file: the home page updates
-  await page.getByRole('link', { name: 'תיק התכנית ואישור נתונים' }).click();
+  await page.getByRole('link', { name: 'עריכת הנתונים בתיק התכנית' }).click();
   await expect(page).toHaveURL(new RegExp(`/plans/${TML}$`));
   const housingRow = page.locator('tr[data-qty]', { has: page.locator('select[aria-label="תחום"] option:checked', { hasText: 'יחידות דיור' }) }).first();
   await housingRow.getByRole('button', { name: 'אישור' }).click();
   await expect.poll(() => writes.some((w) => w.method === 'PATCH' && w.table === 'mt_plan_quantities' && (w.body as { status?: string; value?: number }).status === 'approved' && (w.body as { value?: number }).value === 1973)).toBe(true);
   await page.locator('.tb-nav').getByRole('link', { name: 'בית' }).click();
-  await expect(page.getByTestId('start-card').locator('.s-approved')).toContainText('3,173');
+  await expect(page.getByTestId('start-card').locator('.s-approved')).toContainText('6,717');
 
   // 4. add a plan: Xplan blue line, files, approval screen
   await page.locator('.tb-nav').getByRole('link', { name: 'הוספת תכנית' }).click();
@@ -758,7 +800,7 @@ test('simple flow: home, map with search, plan page with layers, 3D, drawing and
   await expect(page.getByLabel('שם התכנית')).toHaveValue('תכנית מ-Xplan');
   await page.getByRole('button', { name: 'יצירת התכנית' }).click();
   await expect(page.getByTestId('created')).toBeVisible();
-  expect(writes.filter((w) => w.method === 'POST' && w.table === 'mt_plans').pop()!.body).toMatchObject({ plan_number: '603-0999999', mavat_number: '603-0999999', boundary_source: 'xplan', status: 'pipeline' });
+  expect(writes.filter((w) => w.method === 'POST' && w.table === 'mt_plans').pop()!.body).toMatchObject({ plan_number: '603-0999999', mavat_number: '603-0999999', boundary_source: 'xplan', status: 'approved' });
   expect(writes.find((w) => w.method === 'POST' && w.table === 'mt_plan_layers' && (w.body as { source?: string }).source?.includes('Xplan'))!.body).toMatchObject({ kind: 'blue_line', accuracy: 'exact' });
   const fs2 = await import('node:fs');
   await page.getByLabel('בחירת קבצים').setInputFiles([
@@ -771,7 +813,7 @@ test('simple flow: home, map with search, plan page with layers, 3D, drawing and
   await page.getByRole('button', { name: 'קליטת הקבצים' }).click();
   await expect(page.getByTestId('add-files').locator('.chip.st-pass')).toHaveCount(4, { timeout: 20000 });
   expect(writes.filter((w) => w.table === 'mt_plan_layers').map((w) => (w.body as { kind: string }).kind)).toEqual(expect.arrayContaining(['blue_line', 'land_use', 'building_lines', 'demolish']));
-  expect(writes.find((w) => w.method === 'POST' && w.table === 'mt_plan_quantities' && Array.isArray(w.body))!.body).toEqual(expect.arrayContaining([expect.objectContaining({ domain_key: 'housing', value: 2460, origin: 'mavat', status: 'draft' })]));
+  expect(writes.find((w) => w.method === 'POST' && w.table === 'mt_plan_quantities' && Array.isArray(w.body))!.body).toEqual(expect.arrayContaining([expect.objectContaining({ domain_key: 'housing', value: 2460, origin: 'mavat', status: 'approved' })]));
   expect(writes.find((w) => w.table === 'fn:mt-extract')).toBeTruthy();
   await page.screenshot({ path: SHOTS + 'add.png', fullPage: true });
   await page.getByRole('button', { name: 'למסך האישור' }).click();
@@ -783,11 +825,14 @@ test('simple flow: home, map with search, plan page with layers, 3D, drawing and
   await expect(page.getByTestId('compare-table')).toContainText('תמל/2022');
   await page.getByLabel('תחום').selectOption('education');
   await expect(page).toHaveURL(/domain=education/);
+  // a district and a plan open in the panel, on this page
+  await page.getByTestId('compare-table').getByRole('button', { name: /מרכז מתחדש/ }).click();
+  await expect(page.getByTestId('peek-district')).toContainText('מרכז מתחדש');
+  await expect(page).toHaveURL(/\/compare\?/);
+  await page.getByTestId('peek').getByRole('button', { name: 'סגירה' }).click();
   await page.getByRole('tab', { name: 'לפי תחום' }).click();
   await expect(page.getByTestId('compare-domains').locator('tbody tr')).toHaveCount(8);
   await page.screenshot({ path: SHOTS + 'compare.png', fullPage: true });
-  await page.getByTestId('next-step').click();
-  await expect(page).toHaveURL(/\/add$/);
 
   // more tools: every earlier page, each with its purpose
   await page.locator('.tb-nav').getByRole('link', { name: 'כלים נוספים' }).click();
@@ -803,7 +848,7 @@ test('plan page is public: anonymous sees layers and approved data only', async 
   await page.goto('/plan/603-0811588');
   await expect(page.getByTestId('layer-list')).toContainText('קו כחול');
   await expect(page.getByTestId('plan-facts')).toContainText('30');
-  await expect(page.getByTestId('plan-facts')).not.toContainText('3,544');
+  await expect(page.getByTestId('plan-facts')).not.toContainText('טבלה 5: 3,544');
   await expect(page.getByTestId('plan-gap')).toContainText('נשאר');
   await expect(page.getByLabel('קובץ תשריט')).toHaveCount(0);
   await page.goto('/add');

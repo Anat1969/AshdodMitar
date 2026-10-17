@@ -23,6 +23,7 @@ import PlanViewPage from './pages/PlanView';
 import AddPlanPage from './pages/AddPlan';
 import ComparePage from './pages/Compare';
 import ToolsPage from './pages/Tools';
+import Peek from './components/Peek';
 import './styles.css';
 
 function CheckRedirect() { const { id } = useParams(); return <Navigate to={`/tools/check/${id}`} replace />; }
@@ -56,6 +57,7 @@ function App() {
         <Route path="/check/:id" element={<CheckRedirect />} />
         <Route path="*" element={<StartPage />} />
       </Routes>
+      <Peek />
     </div>
   );
 }

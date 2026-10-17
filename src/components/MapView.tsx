@@ -176,7 +176,7 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
         map.addLayer({ id: 'ex-edu', type: 'circle', source: 'existing', paint: { 'circle-radius': ['case', ['==', ['get', 'school'], 1], ['interpolate', ['linear'], ['get', 'classes'], 1, 4, 40, 11], 3], 'circle-color': ['case', ['==', ['get', 'school'], 1], '#2b3038', '#ffffff'], 'circle-stroke-color': '#2b3038', 'circle-stroke-width': 1.3 }, layout: { visibility: 'none' } });
         map.addLayer({ id: 'city-line', type: 'line', source: 'city', paint: { 'line-color': '#15181d', 'line-width': 2.6 } });
         map.addLayer({ id: 'plan-areas-fill', type: 'fill', source: 'plan-areas', paint: { 'fill-color': ['case', ['==', ['get', 'approved'], 1], '#4f7a63', '#b7832a'], 'fill-opacity': 0.32 } });
-        map.addLayer({ id: 'plan-areas-line', type: 'line', source: 'plan-areas', paint: { 'line-color': ['case', ['==', ['get', 'approved'], 1], '#1f3b2c', '#8a5f12'], 'line-width': 2, 'line-dasharray': ['case', ['==', ['get', 'approved'], 1], ['literal', [1, 0]], ['literal', [3, 2]]] } });
+        map.addLayer({ id: 'plan-areas-line', type: 'line', source: 'plan-areas', paint: { 'line-color': ['case', ['==', ['get', 'approved'], 1], '#1f3b2c', '#8a5f12'], 'line-width': 2 } });
         map.addLayer({ id: 'plan-lots-fill', type: 'fill', source: 'plan-lots', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.72 } });
         map.addLayer({ id: 'plan-lots-line', type: 'line', source: 'plan-lots', paint: { 'line-color': '#15181d', 'line-width': ['case', ['==', ['get', 'sel'], 1], 3, 0.8] } });
         map.addLayer({ id: 'plan-sel-line', type: 'line', source: 'plan-areas', filter: ['==', ['get', 'sel'], 1], paint: { 'line-color': '#15181d', 'line-width': 3.4 } });

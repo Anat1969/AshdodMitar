@@ -90,3 +90,32 @@ describe('gap rows', () => {
     expect(r.parts.map((p) => [p.label, p.value, p.scenario, p.highlight])).toEqual([['A', 100, false, true], ['B', 50, true, false]]);
   });
 });
+
+describe('3D floors and quarters (2026-10-17)', () => {
+  it('cuts a tower into floors and keeps the envelope whole', async () => {
+    const { sliceFloors } = await import('../src/lib/planlayers');
+    const sq = { type: 'Polygon' as const, coordinates: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]] };
+    const fc = sliceFloors({ type: 'FeatureCollection', features: [
+      { type: 'Feature', geometry: sq, properties: { kind: 'envelope', height: 60 } },
+      { type: 'Feature', geometry: sq, properties: { kind: 'tower', base: 13.2, height: 46.2 } },
+    ] });
+    expect(fc.features.filter((f) => f.properties?.kind === 'envelope')).toHaveLength(1);
+    const t = fc.features.filter((f) => f.properties?.kind === 'tower');
+    expect(t).toHaveLength(10);
+    expect(t[0].properties!.base).toBeCloseTo(13.2);
+    expect(t[9].properties!.height).toBeLessThan(46.2);
+    expect(t[9].properties!.height).toBeGreaterThan(45);
+  });
+  it('finds the quarter of a plan by point in polygon', async () => {
+    const { inPolygon } = await import('../src/lib/planlayers');
+    const sq = { type: 'Polygon' as const, coordinates: [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]] };
+    expect(inPolygon([1, 1], sq)).toBe(true);
+    expect(inPolygon([3, 1], sq)).toBe(false);
+    expect(inPolygon([1, 1], { type: 'MultiPolygon', coordinates: [sq.coordinates] })).toBe(true);
+  });
+  it('share of the whole as text', async () => {
+    const { shareText } = await import('../src/lib/peek');
+    expect(shareText(3544, 11100)).toBe('31.9%');
+    expect(shareText(5, null)).toBeNull();
+  });
+});

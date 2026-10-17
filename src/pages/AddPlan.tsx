@@ -4,13 +4,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
-import { fetchXplan, statusFromText, xplanFacts, type XplanResult } from '../lib/xplan';
+import { fetchXplan, xplanFacts, type XplanResult } from '../lib/xplan';
 import { findPlan, planKey } from '../lib/plansapi';
 import { planFromFile, pickLayers } from '../lib/gis';
 import { planLayersFromShp } from '../lib/planlayers';
 import { isAreasTable, isRightsTable, parseAreasTable, parseRightsTable, quantitiesFromAreas, quantitiesFromRights } from '../lib/mavat';
 import { pdfFirstPageToPng } from '../lib/pdfimage';
-import { NextStep, Page } from '../components/ui';
+import { Page } from '../components/ui';
 import type { Plan } from '../lib/data';
 
 type Kind = 'gis' | 'instructions' | 'building' | 'tashrit' | 'table' | 'other';
@@ -56,7 +56,7 @@ export default function AddPlanPage() {
     setBusy(true);
     const f = x ? xplanFacts(x.props) : null;
     const row = {
-      plan_number: num.trim(), mavat_number: /^\d{3}-\d{7}$/.test(num.trim()) ? num.trim() : null, name: name.trim(), status: statusFromText(f?.status ?? null),
+      plan_number: num.trim(), mavat_number: /^\d{3}-\d{7}$/.test(num.trim()) ? num.trim() : null, name: name.trim(), status: 'approved',
       sector: 'general', fabric: 'existing', is_renewal: true, units_added: 0, boundary: x?.boundary ?? null, boundary_source: x ? 'xplan' : null,
       mavat_url: f?.url ?? null, source: x ? 'Xplan, מינהל התכנון' : 'הוזן ידנית', created_by: session?.user.email ?? null, is_example: false,
     };
@@ -98,8 +98,8 @@ export default function AddPlanPage() {
       const html = (await it.file.text()).replace(/^﻿/, '');
       const drafts = isRightsTable(html) ? quantitiesFromRights(parseRightsTable(html)) : isAreasTable(html) ? quantitiesFromAreas(parseAreasTable(html)) : [];
       if (!drafts.length) return 'נשמר, אבל אינו טבלת זכויות או שטחים של מבא"ת';
-      await supabase.from('mt_plan_quantities').insert(drafts.map((d) => ({ plan_id: p.id, district_id: p.district_id, domain_key: d.domain_key, value: d.value, doc_id: docId, quote: d.quote, note: d.note, status: 'draft', origin: 'mavat', created_by: email })));
-      return `נקראו ${drafts.length} נתונים לטיוטה`;
+      await supabase.from('mt_plan_quantities').insert(drafts.map((d) => ({ plan_id: p.id, district_id: p.district_id, domain_key: d.domain_key, value: d.value, doc_id: docId, quote: d.quote, note: d.note, status: 'approved', origin: 'mavat', created_by: email })));
+      return `נקראו ${drafts.length} נתונים ונקלטו`;
     }
     if (it.kind === 'tashrit') {
       const { data: blue } = await supabase.from('mt_plan_layers').select('geojson').eq('plan_id', p.id).eq('kind', 'blue_line').maybeSingle();
@@ -132,7 +132,7 @@ export default function AddPlanPage() {
     setBusy(false); refresh();
   };
 
-  if (!canWrite) return <Page kicker="הוספת תכנית" title="הוספת תכנית"><div className="notice">הוספת תכנית פתוחה לעורכים אחרי כניסה, מכפתור "מערכת".</div><NextStep to="/map" label="למפה" /></Page>;
+  if (!canWrite) return <Page kicker="הוספת תכנית" title="הוספת תכנית"><div className="notice">הוספת תכנית פתוחה לעורכים אחרי כניסה, מכפתור "מערכת".</div></Page>;
 
   return (
     <Page kicker="הוספת תכנית" title="תכנית חדשה: מספר, קו כחול, קבצים">
@@ -181,7 +181,6 @@ export default function AddPlanPage() {
           <button type="button" className="btn" disabled={!plan} onClick={() => plan && nav(`/plan/${planKey(plan)}`)}>לדף התכנית</button>
         </div>
       </section>
-      <NextStep to="/compare" label="השוואה ליעד" why="אחרי האישור: מה התכנית תורמת ליעד" />
     </Page>
   );
 }

@@ -1,6 +1,6 @@
 // Compare to target (simple flow, page 5): per district and per domain: target, each plan's contribution, total, gap.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useStore } from '../lib/store';
@@ -8,14 +8,18 @@ import { fmt } from '../lib/data';
 import { cityCell } from '../lib/ledger';
 import { EMPTY_STYLE, loadBaseStyle } from '../lib/basemaps';
 import { planKey } from '../lib/plansapi';
-import { Loading, NextStep, Page } from '../components/ui';
+import { usePeek } from '../lib/peek';
+import { ramp } from '../components/RemainingMap';
+import { Loading, Page } from '../components/ui';
 import { Progress, pctText } from '../components/ledger';
 
-const ramp = (p: number | null) => (p == null ? '#d9dce0' : p >= 1 ? '#3f6b53' : p >= 0.75 ? '#7aa58a' : p >= 0.5 ? '#c9b26a' : p >= 0.25 ? '#d99a5b' : '#c4685a');
+
 
 export default function ComparePage() {
   const { districts, domains, ledger, plans, loading, error } = useStore();
   const [sp, setSp] = useSearchParams();
+  const { open } = usePeek();
+  const openRef = useRef(open); openRef.current = open;
   const view = sp.get('by') === 'domain' ? 'domain' : 'district';
   const dom = sp.get('domain') ?? 'housing';
   const dm = domains.find((d) => d.key === dom) ?? domains[0];
@@ -38,6 +42,7 @@ export default function ComparePage() {
       }
       setReady((n) => n + 1);
     });
+    map.on('click', 'd-fill', (e) => { const id = e.features?.[0]?.properties?.id; if (id) openRef.current('district', Number(id)); });
     loadBaseStyle('plain').then(({ style }) => map.setStyle(style, { diff: false }));
     mapRef.current = map;
     return () => { map.remove(); mapRef.current = null; };
@@ -65,10 +70,10 @@ export default function ComparePage() {
                   <thead><tr><th>מתחם</th><th>יעד</th><th>קיים</th><th>תרומת התכניות</th><th>סך הכול</th><th>פער</th><th>מימוש</th></tr></thead>
                   <tbody>{rows.map(({ d, c }) => (
                     <tr key={d.id}>
-                      <td><Link to={`/district/${d.id}`}><span className="mono">{d.id}</span> {d.name}</Link></td>
+                      <td><button type="button" className="linklike" onClick={() => open('district', d.id)}><span className="mono">{d.id}</span> {d.name}</button></td>
                       <td className="mono">{fmt(c!.target)}</td>
                       <td className="mono">{fmt(c!.existing)}</td>
-                      <td>{c!.contributions.filter((x) => x.bucket === 'approved').map((x, i) => { const p = planName(x.plan_id); return <div key={i}><Link to={`/plan/${p.key}`} className="mono">{p.label}</Link>: <span className="mono">{fmt(x.value)}</span></div>; })}{!c!.contributions.some((x) => x.bucket === 'approved') && <span className="ls">אין</span>}</td>
+                      <td>{c!.contributions.filter((x) => x.bucket === 'approved').map((x, i) => { const p = planName(x.plan_id); return <div key={i}><button type="button" className="linklike mono" onClick={() => open('plan', p.key)}>{p.label}</button>: <span className="mono">{fmt(x.value)}</span></div>; })}{!c!.contributions.some((x) => x.bucket === 'approved') && <span className="ls">אין</span>}</td>
                       <td className="mono">{c!.existing == null ? `${fmt(c!.approved)} (בלי קיים)` : fmt(c!.existing + c!.approved)}</td>
                       <td className="mono">{c!.remaining != null ? fmt(c!.remaining) : c!.target == null ? 'חסר יעד' : `חסר קיים, ${fmt(c!.remainingBeforeExisting)} בלי הקיים`}</td>
                       <td><Progress p={c!.progress} scenario={c!.scenarioProgress} /></td>
@@ -97,7 +102,6 @@ export default function ComparePage() {
           </div>
         </section>
       )}
-      <NextStep to="/add" label="הוספת תכנית" why="כל תכנית שמתווספת ומאושרת מקטינה את הפער" />
     </Page>
   );
 }

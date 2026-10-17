@@ -1,6 +1,6 @@
 // More tools: every earlier page and button stays available here, each with one sentence on its purpose.
 import { Link } from 'react-router-dom';
-import { NextStep, Page } from '../components/ui';
+import { Page } from '../components/ui';
 
 export const TOOLS: { to: string; title: string; purpose: string | null }[] = [
   { to: '/about', title: 'איך זה עובד', purpose: 'הסבר על הקלט, החישוב והפלט של הכלי, והמקורות.' },
@@ -25,7 +25,6 @@ export default function ToolsPage() {
         {TOOLS.map((t) => <li key={t.to} className="card"><Link to={t.to}><b>{t.title}</b></Link><span>{t.purpose ?? 'מטרה לא מוגדרת'}</span></li>)}
       </ul>
       <div className="ls">כפתורי "העתקת קישור", "שיחת הפיתוח", "פרויקט המחקר", התקנה וחשבון נמצאים בכפתור "מערכת" בסרגל העליון.</div>
-      <NextStep to="/" label="לדף הבית" />
     </Page>
   );
 }

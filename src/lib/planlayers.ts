@@ -48,3 +48,33 @@ export function planLayersFromShp(out: Named | Named[], rights: RightsRow[] = []
   }
   return layers;
 }
+
+const SLAB = 0.9; // share of a floor that is solid; the rest is the dark gap that reads as a floor line
+
+// Cut each solid volume (podium, tower, or a feature without a kind) into floor slabs; envelopes stay whole.
+export function sliceFloors(fc: GeoJSON.FeatureCollection | null, floorM = FLOOR_M, maxSlabs = 6000): GeoJSON.FeatureCollection {
+  if (!fc) return { type: 'FeatureCollection', features: [] };
+  const out: GeoJSON.Feature[] = [];
+  for (const f of fc.features) {
+    const p = (f.properties ?? {}) as Record<string, unknown>;
+    const top = Number(p.height ?? 0), base = Number(p.base ?? 0);
+    if (p.kind === 'envelope' || !(top > base) || out.length > maxSlabs) { out.push(f); continue; }
+    const n = Math.max(1, Math.round((top - base) / floorM)), h = (top - base) / n;
+    for (let i = 0; i < n; i++) out.push({ ...f, properties: { ...p, base: base + i * h, height: base + i * h + h * SLAB, floor: i + 1, floors_here: n } });
+  }
+  return { type: 'FeatureCollection', features: out };
+}
+
+// ray casting on the outer rings of a (Multi)Polygon
+export function inPolygon(pt: [number, number], g: GeoJSON.Geometry | null | undefined): boolean {
+  if (!g) return false;
+  const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+  return polys.some((rings) => {
+    const r = rings[0]; let inside = false;
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      const [xi, yi] = r[i], [xj, yj] = r[j];
+      if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < ((xj - xi) * (pt[1] - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  });
+}
