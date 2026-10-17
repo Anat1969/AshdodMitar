@@ -36,9 +36,14 @@ export default function PlanMap3D({ layers, visible, mode, tashrit, bbox, drawin
       map.addLayer({ id: 'demolish-fill', type: 'fill', source: 'demolish', paint: { 'fill-color': '#b23a32', 'fill-opacity': 0.45 } });
       map.addLayer({ id: 'demolish-line', type: 'line', source: 'demolish', paint: { 'line-color': '#7a1f1a', 'line-width': 1.4, 'line-dasharray': [2, 1.5] } });
       map.addLayer({ id: 'demolish-3d', type: 'fill-extrusion', source: 'demolish', paint: { 'fill-extrusion-color': '#c2554d', 'fill-extrusion-height': ['coalesce', ['get', 'height'], 9], 'fill-extrusion-opacity': 0.55 } });
-      map.addLayer({ id: 'proposed-fill', type: 'fill', source: 'proposed', paint: { 'fill-color': '#e2b350', 'fill-opacity': 0.7 } });
-      map.addLayer({ id: 'proposed-line', type: 'line', source: 'proposed', paint: { 'line-color': '#7c5a12', 'line-width': 1 } });
-      map.addLayer({ id: 'proposed-3d', type: 'fill-extrusion', source: 'proposed', paint: { 'fill-extrusion-color': '#e8bd5d', 'fill-extrusion-height': ['coalesce', ['get', 'height'], 30], 'fill-extrusion-base': ['coalesce', ['get', 'base'], 0], 'fill-extrusion-opacity': 0.88 } });
+      // proposed: "envelope" = what may be built (building lines x max height), drawn as a light glass box;
+      // "podium" / "tower" (or features without a kind) = the building volume, solid
+      const ENV = ['==', ['get', 'kind'], 'envelope'];
+      const SOLIDF = ['!=', ['coalesce', ['get', 'kind'], ''], 'envelope'];
+      map.addLayer({ id: 'proposed-fill', type: 'fill', source: 'proposed', filter: SOLIDF as never, paint: { 'fill-color': ['match', ['get', 'kind'], 'podium', '#c7b9a0', '#e2b350'], 'fill-opacity': 0.8 } });
+      map.addLayer({ id: 'proposed-line', type: 'line', source: 'proposed', paint: { 'line-color': ['case', ENV as never, '#7c5a12', '#5c430d'], 'line-width': ['case', ENV as never, 1.6, 0.8], 'line-dasharray': ['case', ENV as never, ['literal', [3, 2]], ['literal', [1, 0]]] } });
+      map.addLayer({ id: 'proposed-env-3d', type: 'fill-extrusion', source: 'proposed', filter: ENV as never, paint: { 'fill-extrusion-color': '#f3e3bd', 'fill-extrusion-height': ['coalesce', ['get', 'height'], 30], 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.22 } });
+      map.addLayer({ id: 'proposed-3d', type: 'fill-extrusion', source: 'proposed', filter: SOLIDF as never, paint: { 'fill-extrusion-color': ['match', ['get', 'kind'], 'podium', '#cdbfa6', '#e8bd5d'], 'fill-extrusion-height': ['coalesce', ['get', 'height'], 30], 'fill-extrusion-base': ['coalesce', ['get', 'base'], 0], 'fill-extrusion-opacity': 0.92 } });
       map.addLayer({ id: 'building_lines', type: 'line', source: 'building_lines', paint: { 'line-color': ['case', ['==', ['get', 'active'], 1], '#7a3fb0', '#c2185b'], 'line-width': 1.6, 'line-dasharray': ['case', ['==', ['get', 'under'], 1], ['literal', [1, 1.5]], ['literal', [4, 2]]] } });
       map.addLayer({ id: 'blue_line', type: 'line', source: 'blue_line', paint: { 'line-color': '#1d4ed8', 'line-width': 3.4 } });
       map.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#e2b350', 'line-width': 2.4 } });
@@ -79,6 +84,7 @@ export default function PlanMap3D({ layers, visible, mode, tashrit, bbox, drawin
     for (const k of SOLID) {
       const on = visible.has(k);
       vis(`${k}-3d`, on && mode === '3d');
+      if (k === 'proposed') vis('proposed-env-3d', on && mode === '3d');
       vis(`${k}-fill`, on && mode === '2d');
       if (map.getLayer(`${k}-line`)) vis(`${k}-line`, on && mode === '2d');
     }

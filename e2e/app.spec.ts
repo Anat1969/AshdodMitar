@@ -677,7 +677,8 @@ test('simple flow: home, map with search, plan page with layers, 3D, drawing and
   const card = page.getByTestId('start-card');
   await expect(card).toContainText('יעד תוספת יח"ד');
   await expect(card.locator('.s-approved')).toContainText('1,200');
-  await expect(card).toContainText('ממתינים לאישור');
+  await expect(page.getByTestId('city-gap').locator('.gap-row')).toHaveCount(8);
+  await expect(page.getByTestId('city-gap').locator('.gap-row[data-domain="housing"]')).toContainText('נשאר');
   await page.screenshot({ path: SHOTS + 'start.png', fullPage: true });
   await card.getByRole('link', { name: 'למפה' }).click();
 
@@ -698,7 +699,11 @@ test('simple flow: home, map with search, plan page with layers, 3D, drawing and
   await expect(layers.locator('li', { hasText: 'מבנים מוצעים' })).toContainText('מקור מדויק');
   await expect(layers.locator('li.off', { hasText: 'קווי בניין' })).toContainText('חסר');
   await expect(page.getByTestId('plan-facts')).toContainText('3,544');
-  await expect(page.getByTestId('plan-facts')).toContainText('טיוטה');
+  // what is needed in the district, what this plan does, what is left
+  const gap = page.getByTestId('plan-gap');
+  await expect(gap).toContainText('מה צריך במתחם 7');
+  await expect(gap.locator('.gap-row[data-domain="housing"] .gp-this')).toContainText('603-0811588');
+  await expect(gap.locator('.gap-row[data-domain="education"] .gp-demand')).toContainText('ביקוש חדש');
   await expect(page.getByTestId('plan-status')).toHaveText('בהכנה');
   await page.getByRole('tab', { name: 'תלת-ממד' }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __pmap: { getPitch: () => number } }).__pmap.getPitch())).toBeGreaterThan(50);
@@ -799,7 +804,7 @@ test('plan page is public: anonymous sees layers and approved data only', async 
   await expect(page.getByTestId('layer-list')).toContainText('קו כחול');
   await expect(page.getByTestId('plan-facts')).toContainText('30');
   await expect(page.getByTestId('plan-facts')).not.toContainText('3,544');
-  await expect(page.getByTestId('plan-facts')).toContainText('מוצגים נתונים מאושרים בלבד');
+  await expect(page.getByTestId('plan-gap')).toContainText('נשאר');
   await expect(page.getByLabel('קובץ תשריט')).toHaveCount(0);
   await page.goto('/add');
   await expect(page.getByText('הוספת תכנית פתוחה לעורכים')).toBeVisible();

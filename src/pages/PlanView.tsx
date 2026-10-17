@@ -1,6 +1,6 @@
 // Plan page (simple flow, page 3): /plan/<number>. Layers, proposed-state drawing, 2D / 3D, data card and source files.
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
@@ -10,6 +10,7 @@ import { LAYER_TITLE, type LayerKind } from '../lib/planlayers';
 import { docUrl } from '../lib/docfile';
 import { pdfFirstPageToPng } from '../lib/pdfimage';
 import PlanMap3D, { type MapLayerData } from '../components/PlanMap3D';
+import { demandFromUnits, GapLegend, GapRow, gapRows } from '../components/GapBars';
 import { Loading, NextStep, Page } from '../components/ui';
 import type { Doc } from './Documents';
 
@@ -19,12 +20,15 @@ const dmy = (d: string | null | undefined) => (d ? d.split('-').reverse().join('
 
 export default function PlanViewPage() {
   const { num = '' } = useParams();
-  const { plans, districts, quantities, loading, error } = useStore();
+  const { plans, districts, quantities, ledger, domains, loading, error } = useStore();
   const { canWrite, isMember, session } = useAuth();
   const plan = findPlan(plans, num);
   const [layers, setLayers] = useState<PlanLayerRow[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
-  const [mode, setMode] = useState<'2d' | '3d'>('2d');
+  const [sp, setSp] = useSearchParams();
+  // ?view=3d opens in 3D, so a link (and "העתקת קישור") can share the 3D view
+  const mode: '2d' | '3d' = sp.get('view') === '3d' ? '3d' : '2d';
+  const setMode = (m: '2d' | '3d') => { const n = new URLSearchParams(sp); if (m === '3d') n.set('view', '3d'); else n.delete('view'); setSp(n, { replace: true }); };
   const [visible, setVisible] = useState<Set<LayerKind>>(new Set(ORDER));
   const [opacity, setOpacity] = useState(0.6);
   const [tUrl, setTUrl] = useState<string | null>(null);
@@ -63,6 +67,7 @@ export default function PlanViewPage() {
     { label: 'יח"ד קיימות', f: f('units_existing') },
     { label: 'יח"ד מוצעות', f: f('units_proposed') },
     { label: 'תוספת נטו', f: f('housing', true) },
+    { label: 'סה"כ שטחי בנייה, מ"ר', f: f('built_m2') },
     { label: 'שטח עיקרי, מ"ר', f: f('main_m2') },
     { label: 'שטח שירות, מ"ר', f: f('service_m2') },
     { label: 'קומות מרביות', f: f('floors_max') },
@@ -107,6 +112,20 @@ export default function PlanViewPage() {
   return (
     <Page kicker={`תכנית ${plan.plan_number ?? ''}${plan.mavat_number && plan.mavat_number !== plan.plan_number ? ` · ${plan.mavat_number}` : ''}`} title={plan.name}
       actions={<><span className={`chip status-${g}`} data-testid="plan-status">{STATUS_GROUP_LABEL[g]}</span>{isMember && <Link className="btn" to={`/plans/${plan.id}`}>תיק התכנית ואישור נתונים</Link>}</>}>
+      {district && (
+        <section className="card gap-card" data-testid="plan-gap">
+          <div className="card-head"><h2>מה צריך במתחם {district.id}, מה התכנית עושה, ומה נשאר</h2><GapLegend /></div>
+          <div className="ls">{district.name}. היעד לפי תכנית המתאר 603-0528026 (לא בתוקף). "צריך" = יעד פחות קיים. "נשאר" = מה שצריך אחרי כל התכניות.</div>
+          {(() => {
+            const net = f('housing', true).value ?? 0;
+            const dmd = net > 0 ? demandFromUnits(net, plan.sector === 'haredi' ? 'haredi' : 'general') : null;
+            return gapRows(ledger, domains, plans, [district.id], plan.id).map((r) => (
+              <GapRow key={r.key} r={{ ...r, demand: dmd && r.key === 'education' ? { value: dmd.classes, label: 'ביקוש חדש שהתוספת יוצרת, כיתות' } : dmd && r.key === 'kinder' ? { value: dmd.kinder, label: 'ביקוש חדש שהתוספת יוצרת, כיתות גן' } : null }} />
+            ));
+          })()}
+          <div className="ls">ביקוש חדש: תוספת הדירות כפול גודל משק בית ושיעור שנתון (מסמך המדיניות, טיוטה), 30 תלמידים בכיתה (הנחת עבודה).</div>
+        </section>
+      )}
       <div className="pv-grid">
         <section className="card pv-map">
           <div className="pv-tools">
@@ -160,7 +179,7 @@ export default function PlanViewPage() {
             <dl className="kv pv-kv">
               {facts.map((x) => (
                 <div key={x.label} className="kv-row"><dt>{x.label}</dt>
-                  <dd className="mono">{fmt(x.f.value)}{x.f.status === 'draft' && <span className="chip st-warn">טיוטה</span>}</dd>
+                  <dd className="mono">{fmt(x.f.value)}{x.f.q?.note && /הערכה|לאמת|פרסום/.test(x.f.q.note) && <span className="chip st-warn">לבדיקה</span>}</dd>
                   {x.f.q?.quote && <dd className="ls src">{x.f.q.quote}{x.f.q.page ? `, עמ' ${x.f.q.page}` : ''}</dd>}
                 </div>
               ))}
@@ -172,7 +191,7 @@ export default function PlanViewPage() {
               <div className="kv-row"><dt>שטח</dt><dd className="mono">{plan.area_m2 ? `${fmt(plan.area_m2 / 1000, 1)} דונם` : 'חסר'}</dd></div>
             </dl>
             {plan.note && <div className="ls">{plan.note}</div>}
-            <div className="ls">{isMember ? 'טיוטה: נתון שחולץ ועוד לא אושר. רק נתון מאושר נספר ביעד.' : 'מוצגים נתונים מאושרים בלבד.'}</div>
+            {plan.status_note && <div className="ls">{plan.status_note}</div>}
           </section>
           <section className="card" data-testid="plan-sources">
             <div className="card-head"><h2>מסמכי מקור</h2></div>

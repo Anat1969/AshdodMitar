@@ -78,3 +78,15 @@ describe('simple flow helpers', () => {
     expect(bboxOfFC({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [1, 2] }, properties: {} }, { type: 'Feature', geometry: { type: 'Point', coordinates: [3, 0] }, properties: {} }] })).toEqual([1, 0, 3, 2]);
   });
 });
+
+import { gapRows } from '../src/components/GapBars';
+describe('gap rows', () => {
+  const cell = (target: number | null, existing: number | null, contributions: { plan_id: string; value: number; bucket: 'approved' | 'scenario' }[] = []) => ({ target, existing, contributions } as never);
+  const ledger = { 1: { housing: cell(1000, 600, [{ plan_id: 'a', value: 100, bucket: 'approved' }]) }, 2: { housing: cell(500, null) }, 3: { housing: cell(800, 700, [{ plan_id: 'b', value: 50, bucket: 'scenario' }]) } };
+  const plans = [{ id: 'a', plan_number: 'A', name: 'a', is_example: false }, { id: 'b', plan_number: 'B', name: 'b', is_example: false }] as never;
+  it('sums needed only where the existing state is known, and highlights the plan', () => {
+    const [r] = gapRows(ledger as never, [{ key: 'housing', title: 'יח"ד', unit: 'יח"ד', sort: 1, target_rule: null, target_certainty: 'plan-draft' }], plans, [1, 2, 3], 'a');
+    expect(r).toMatchObject({ target: 1800, existing: 1300, partial: 1 });
+    expect(r.parts.map((p) => [p.label, p.value, p.scenario, p.highlight])).toEqual([['A', 100, false, true], ['B', 50, true, false]]);
+  });
+});

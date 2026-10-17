@@ -5,6 +5,7 @@ import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { fmt } from '../lib/data';
 import { Loading, NextStep, Page } from '../components/ui';
+import { GapLegend, GapRow, gapRows } from '../components/GapBars';
 
 export function housingTotals(districts: { id: number; units_added: number | null }[], ledger: Record<number, Record<string, { approved: number; scenario: number }>>) {
   const known = districts.filter((d) => d.units_added != null && d.units_added > 0);
@@ -15,7 +16,7 @@ export function housingTotals(districts: { id: number; units_added: number | nul
 }
 
 export default function StartPage() {
-  const { districts, ledger, quantities, plans, loading, error } = useStore();
+  const { districts, ledger, quantities, plans, domains, loading, error } = useStore();
   const { isMember } = useAuth();
   if (loading) return <main className="page"><Loading error={error} /></main>;
   const t = housingTotals(districts, ledger);
@@ -38,9 +39,14 @@ export default function StartPage() {
           <motion.span className="seg-process" initial={{ width: 0 }} animate={{ width: `${pct(t.process)}%` }} transition={{ duration: 0.8, delay: 0.2 }} />
         </div>
         <div className="start-legend ls"><span>מאושר: {Math.round(pct(t.approved))}%</span><span>בהליך: {Math.round(pct(t.process))}%</span><span>חסר: {Math.round(100 - pct(t.approved) - pct(t.process))}%</span></div>
-        <div className="ls">היעד: סכום תוספת יח"ד שתכנית המתאר (603-0528026, לא בתוקף) קובעת ל-{t.districtsKnown} מתחמים.{noHousing.length ? ` חסר יעד ל: ${noHousing.join(', ')}.` : ''} נספר רק נתון שאושר: תוספת נטו של כל תכנית.</div>
-        {isMember && drafts > 0 && <div className="notice">{drafts} נתוני יח"ד ממתינים לאישור ועוד לא נספרים. <Link to="/plans">לאישור</Link></div>}
+        <div className="ls">היעד: סכום תוספת יח"ד שתכנית המתאר (603-0528026, לא בתוקף) קובעת ל-{t.districtsKnown} מתחמים.{noHousing.length ? ` חסר יעד ל: ${noHousing.join(', ')}.` : ''} נספרת התוספת נטו של כל תכנית.</div>
+        {isMember && drafts > 0 && <div className="notice">{drafts} נתוני יח"ד עוד לא נקלטו. <Link to="/plans">לתיקי התכניות</Link></div>}
         <div className="row-actions"><Link className="btn primary" to="/map">למפה</Link><Link className="btn" to="/compare">השוואה ליעד לפי מתחם ותחום</Link></div>
+      </section>
+      <section className="card gap-card" data-testid="city-gap">
+        <div className="card-head"><h2>כל התחומים: מה צריך, מה כל תכנית עושה, ומה נשאר</h2><GapLegend /></div>
+        {gapRows(ledger, domains, plans, districts.map((d) => d.id)).map((r) => <GapRow key={r.key} r={r} />)}
+        <div className="ls">סכום כל המתחמים שיש להם יעד בתחום. כשחסר מצב קיים, "נשאר" אינו מחושב. לחיצה על תכנית פותחת אותה.</div>
       </section>
       <div className="ls">{real.length} תכניות במערכת. <Link to="/tools">כלים נוספים</Link></div>
       <NextStep to="/map" label="למפת התכניות" why="לראות כל תכנית במקומה, ולפתוח את הדף שלה" />
