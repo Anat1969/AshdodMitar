@@ -51,7 +51,7 @@ export default function Home() {
       </section>
 
       <section className="card">
-        <div className="card-head"><h2>העיר לפי נושאים: קיים, מתוכנן ויעד</h2><Link className="btn small" to="/about">איך זה מחושב</Link></div>
+        <div className="card-head"><h2>העיר לפי נושאים: קיים, מתוכנן ויעד</h2><Link className="btn small" to="/">איך זה מחושב</Link></div>
         <TopicsTable cells={cityCells(matrix)} isMember={isMember} testId="city-topics" />
       </section>
 

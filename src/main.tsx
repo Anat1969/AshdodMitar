@@ -20,7 +20,8 @@ function App() {
     <div className="app">
       <TopBar />
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<AboutPage />} />
+        <Route path="/overview" element={<Home />} />
         <Route path="/map" element={<MapPage />} />
         <Route path="/district/:id" element={<DistrictPage />} />
         <Route path="/plan/:id" element={<PlanPage />} />
@@ -29,7 +30,7 @@ function App() {
         <Route path="/rules" element={<RulesPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/report/:year" element={<ReportPage />} />
-        <Route path="*" element={<Home />} />
+        <Route path="*" element={<AboutPage />} />
       </Routes>
     </div>
   );

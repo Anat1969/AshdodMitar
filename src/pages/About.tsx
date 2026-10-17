@@ -13,6 +13,11 @@ const SOURCES: { name: string; what: string; certainty: string }[] = [
 export default function AboutPage() {
   return (
     <Page kicker="איך זה עובד" title="קלט, חישוב ופלט">
+      <div className="row-actions">
+        <Link className="btn primary" to="/overview">לתמונת העיר</Link>
+        <Link className="btn" to="/map">מפה ושכבות</Link>
+        <Link className="btn" to="/plan/new">בדיקת תכנית</Link>
+      </div>
       <p className="lead">התאום מחזיק תמונה אחת של העיר: מה קיים היום, מה מתוכנן, ומה היעד שתכנית המתאר קובעת. כל תכנית שנכנסת היא תוספת לתמונה הזו, והמפה והמספרים מתעדכנים בהתאם.</p>
 
       <section className="flow" aria-label="זרימת העבודה">
