@@ -23,6 +23,7 @@ export interface Plan {
   green_roof_m2: number | null; far: number | null; rahak_row: number | null; location: GeoJSON.Point | null;
   is_example: boolean; note: string | null; data_certainty: string; updated_at?: string; program: Program | null;
   approval_date: string | null; boundary: GeoJSON.Polygon | GeoJSON.MultiPolygon | null; boundary_source: string | null; area_m2: number | null;
+  lots?: GeoJSON.FeatureCollection | null; mavat_number?: string | null;
 }
 
 export interface Rule { id: string; title: string; formula: string; source: string; certainty: string; scope: string; version: number; active: boolean }

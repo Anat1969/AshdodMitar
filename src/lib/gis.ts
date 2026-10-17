@@ -55,20 +55,37 @@ export function parseKml(text: string): Poly[] {
   return polys;
 }
 
-export async function boundaryFromFile(file: File): Promise<GeoJSON.Polygon | GeoJSON.MultiPolygon> {
+type Named = GeoJSON.FeatureCollection & { fileName?: string };
+
+// A מבא"ת Shapefile set holds many layers (lots, building lines, labels, print frame). The boundary is MVT_GVUL;
+// merging every layer would give a wrong boundary. Lots (MVT_PLAN) come back too, for the map.
+export function pickLayers(out: Named | Named[]): { boundaryLayer: Named | null; lots: Named | null; all: Named[] } {
+  const all = ([] as Named[]).concat(out);
+  const by = (re: RegExp) => all.find((fc) => re.test(fc.fileName ?? '')) ?? null;
+  const boundaryLayer = by(/GVUL/i) ?? (all.length === 1 ? all[0] : null);
+  return { boundaryLayer, lots: by(/MVT_PLAN$/i), all };
+}
+
+export async function planFromFile(file: File): Promise<{ boundary: GeoJSON.Polygon | GeoJSON.MultiPolygon; lots: GeoJSON.FeatureCollection | null }> {
   const name = file.name.toLowerCase();
   let polys: Poly[] = [];
+  let lots: GeoJSON.FeatureCollection | null = null;
   if (name.endsWith('.geojson') || name.endsWith('.json')) polys = polygonsOf(JSON.parse(await file.text()));
   else if (name.endsWith('.kml')) polys = parseKml(await file.text());
   else if (name.endsWith('.zip') || name.endsWith('.shp')) {
     if (name.endsWith('.shp')) throw new Error('קובץ SHP צריך להגיע כ-ZIP יחד עם קבצי dbf ו-prj');
-    const shp = (await import('shpjs')).default as unknown as (b: ArrayBuffer) => Promise<unknown>;
-    polys = polygonsOf(await shp(await file.arrayBuffer()));
+    const shp = (await import('shpjs')).default as unknown as (b: ArrayBuffer) => Promise<Named | Named[]>;
+    const picked = pickLayers(await shp(await file.arrayBuffer()));
+    if (!picked.boundaryLayer) throw new Error(`לא נמצאה שכבת גבול (MVT_GVUL) בקובץ. שכבות: ${picked.all.map((x) => x.fileName).join(', ')}`);
+    polys = polygonsOf(picked.boundaryLayer);
+    lots = picked.lots;
   } else throw new Error('פורמט לא נתמך: GeoJSON, KML או SHP בתוך ZIP');
   const b = toBoundary(polys);
   if (!b) throw new Error('לא נמצא פוליגון בקובץ');
-  return b;
+  return { boundary: b, lots };
 }
+
+export async function boundaryFromFile(file: File) { return (await planFromFile(file)).boundary; }
 
 // Rough sanity check: the boundary should fall inside the Ashdod area.
 export function insideAshdod(b: GeoJSON.Polygon | GeoJSON.MultiPolygon): boolean {

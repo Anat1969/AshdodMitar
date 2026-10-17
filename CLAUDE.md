@@ -69,6 +69,10 @@ Commit and push. If a work branch is required: PR, then merge to `main` immediat
 - GIS: GeoJSON, KML, zipped SHP; ITM (EPSG:2039) reprojected in `src/lib/gis.ts`; manual drawing in `BoundaryMap`. Cross-district plans: by rights table, else by area, flagged "הערכה".
 - Pages: `/ledger` (city summary, attention list, exports), `/plans`, `/plans/:id` (plan file: details, documents, extraction, approval with the source page, boundary, bill of quantities vs district target), `/targets`, district page ledger table. Lag flag: a public-needs domain more than 15 points behind housing (assumption). Code: `src/lib/ledger.ts` (pure, `tests/ledger.test.ts`).
 - Exports: Excel via SheetJS (RTL sheets, Latin file names), PDF via print.
+- Plan on the map: picker "תכנית" in the map tools (`?plan=<id>`, shared by "העתקת קישור"); the map flies to the plan, draws its lots (`mt_plans.lots`, coloured by land use) and the card shows the plan's bill of quantities in text (share of the district target, draft/approved). Click a lot for its rights.
+- מבא"ת files are read without AI (`src/lib/mavat.ts`, unit-tested on the real files): rights table "טבלה 5" and areas table (.xls that is HTML), SHP zip (boundary = MVT_GVUL only, lots = MVT_PLAN). Button "קריאת טבלת מבא"ת" in the plan file. Origin `mavat`, always draft.
+- Public plan files can live in `public/plans/<plan>/` and be referenced as `file_path = 'public:/plans/...'` (`src/lib/docfile.ts`).
+- Plan תמל/2022 (603-0380584, פינוי בינוי ציר הרצל-המעפילים, רובע ב', district 2, 145.6 dunam): loaded from its מבא"ת files (`public/plans/tml-2022`, `scripts/seed-tml-2022.ts`). 7 draft rows: 2,460 units (total proposed, about 487 existing to demolish per press, not in the files), commerce 5,461, employment 16,735 + mixed 12,372, public built 5,020 + 373,615 (lot 407 alone 290,166, may include an existing complex), open space land 7,439 m². Status approved by ותמ"ל (press, July 2025); publication date missing.
 
 ## Documents
 - `/documents`: upload any file type (up to 50MB) with name, document date, optional district/plan and note. Table `mt_documents`, private storage bucket `mt-documents`, opened via 5-minute signed URLs. Read: members. Write/delete: editor/admin.
@@ -103,3 +107,4 @@ Final URL + one line on what was built. Update this file.
 - 2026-10-17: "איך זה עובד" is the opening page and first in the nav.
 - 2026-10-17: every verified fix is saved in the skill, in this file and as a test, so it never comes back.
 - 2026-10-17: upload the documents of every approved plan, extract quantities into fields and the boundary into the map, approval screen with the source page, per-plan bill of quantities vs the target, per-district and city summary (approved, cumulative, remaining), plans in process as a separate scenario. Built as the realisation ledger (above).
+- 2026-10-17: loaded plan תמל/2022 from its files; choose a plan and see its bill of quantities on the map and in text.

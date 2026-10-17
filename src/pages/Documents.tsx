@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useStore } from '../lib/store';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { docUrl, isPublicFile } from '../lib/docfile';
 import { Page } from '../components/ui';
 
 export interface Doc {
@@ -67,14 +68,16 @@ export default function DocumentsPage() {
 
   const openDoc = async (d: Doc) => {
     const w = window.open('', '_blank');
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(d.file_path, 300);
-    if (error || !data) { w?.close(); setMsg(`שגיאה בפתיחה: ${error?.message ?? ''}`); return; }
-    if (w) w.location.href = data.signedUrl; else window.location.href = data.signedUrl;
+    let url: string;
+    try { url = await docUrl(d.file_path); } catch (e) { w?.close(); setMsg(`שגיאה בפתיחה: ${(e as Error).message}`); return; }
+    if (w) w.location.href = url; else window.location.href = url;
   };
   const remove = async (d: Doc) => {
     if (!window.confirm(`למחוק את "${d.name}"?`)) return;
-    const r = await supabase.storage.from(BUCKET).remove([d.file_path]);
-    if (r.error) { setMsg(`שגיאה במחיקה: ${r.error.message}`); return; }
+    if (!isPublicFile(d.file_path)) {
+      const r = await supabase.storage.from(BUCKET).remove([d.file_path]);
+      if (r.error) { setMsg(`שגיאה במחיקה: ${r.error.message}`); return; }
+    }
     const del = await supabase.from('mt_documents').delete().eq('id', d.id);
     setMsg(del.error ? `שגיאה במחיקה: ${del.error.message}` : 'המסמך נמחק');
     load();
