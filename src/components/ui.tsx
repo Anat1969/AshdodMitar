@@ -105,13 +105,3 @@ export function Loading({ error }: { error?: string | null }) {
   return <div className="loading">{error ? `שגיאה בטעינת נתונים: ${error}` : 'טוען נתונים'}</div>;
 }
 
-// Every page ends with one clear next step.
-export function NextStep({ to, label, why }: { to: string; label: string; why?: string }) {
-  return (
-    <nav className="next-step" aria-label="הצעד הבא">
-      <span className="kicker">הצעד הבא</span>
-      <Link to={to} className="btn primary" data-testid="next-step">{label}</Link>
-      {why && <span className="ls">{why}</span>}
-    </nav>
-  );
-}

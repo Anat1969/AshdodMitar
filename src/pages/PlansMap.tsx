@@ -1,22 +1,25 @@
-// Map (simple flow, page 2): every plan as its blue line, coloured by status; a searchable list on the side.
+// Map (simple flow, page 2): every plan as its blue line (status by line style, never by colour); a searchable list.
+// A plan opens in the in-page panel.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import maplibregl, { type GeoJSONSource, type Map as MLMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useStore } from '../lib/store';
 import { EMPTY_STYLE, loadBaseStyle } from '../lib/basemaps';
-import { bboxOfFC, planKey, STATUS_GROUP_COLOR, STATUS_GROUP_LABEL, statusGroup, type StatusGroup } from '../lib/plansapi';
-import { Loading, NextStep, Page } from '../components/ui';
+import { bboxOfFC, BLUE_LINE, planKey, STATUS_GROUP_LABEL, statusGroup, type StatusGroup } from '../lib/plansapi';
+import { usePeek } from '../lib/peek';
+import { Loading, Page } from '../components/ui';
 
 const GROUPS: StatusGroup[] = ['approved', 'process', 'prep'];
 
 export default function PlansMapPage() {
   const { plans, features, loading, error } = useStore();
-  const nav = useNavigate();
+  const { open, kind, key } = usePeek();
   const [sp, setSp] = useSearchParams();
   const q = sp.get('q') ?? '';
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
+  const openRef = useRef(open); openRef.current = open;
   const [ready, setReady] = useState(0);
   const [hover, setHover] = useState<string | null>(null);
   const real = useMemo(() => plans.filter((p) => !p.is_example && p.boundary), [plans]);
@@ -28,8 +31,8 @@ export default function PlansMapPage() {
 
   const fc = useMemo<GeoJSON.FeatureCollection>(() => ({
     type: 'FeatureCollection',
-    features: shown.map((p) => ({ type: 'Feature', geometry: p.boundary!, properties: { key: planKey(p), color: STATUS_GROUP_COLOR[statusGroup(p.status)], hover: hover === p.id ? 1 : 0, id: p.id } })),
-  }), [shown, hover]);
+    features: shown.map((p) => ({ type: 'Feature', geometry: p.boundary!, properties: { key: planKey(p), group: statusGroup(p.status), hover: hover === p.id || (kind === 'plan' && key === planKey(p)) ? 1 : 0, id: p.id } })),
+  }), [shown, hover, kind, key]);
 
   useEffect(() => {
     if (!box.current) return;
@@ -40,19 +43,23 @@ export default function PlansMapPage() {
         map.addSource('city', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addSource('plans', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
         map.addLayer({ id: 'city', type: 'line', source: 'city', paint: { 'line-color': '#15181d', 'line-width': 2 } });
-        map.addLayer({ id: 'plans-fill', type: 'fill', source: 'plans', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['case', ['==', ['get', 'hover'], 1], 0.35, 0.12] } });
-        map.addLayer({ id: 'plans-line', type: 'line', source: 'plans', paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['get', 'hover'], 1], 4.5, 3] } });
+        map.addLayer({ id: 'plans-fill', type: 'fill', source: 'plans', paint: { 'fill-color': BLUE_LINE, 'fill-opacity': ['case', ['==', ['get', 'hover'], 1], 0.22, 0.06] } });
+        // line-dasharray cannot vary per feature in MapLibre 4: one layer per status, the same blue
+        const width = ['case', ['==', ['get', 'hover'], 1], 4.5, 3] as never;
+        map.addLayer({ id: 'plans-line', type: 'line', source: 'plans', filter: ['==', ['get', 'group'], 'approved'], paint: { 'line-color': BLUE_LINE, 'line-width': width } });
+        map.addLayer({ id: 'plans-line-process', type: 'line', source: 'plans', filter: ['==', ['get', 'group'], 'process'], paint: { 'line-color': BLUE_LINE, 'line-width': width, 'line-dasharray': [3, 1.5] } });
+        map.addLayer({ id: 'plans-line-prep', type: 'line', source: 'plans', filter: ['!', ['in', ['get', 'group'], ['literal', ['approved', 'process']]]], paint: { 'line-color': BLUE_LINE, 'line-width': width, 'line-dasharray': [1, 1.5] } });
       }
       setReady((n) => n + 1);
     });
-    map.on('click', 'plans-fill', (e) => { const k = e.features?.[0]?.properties?.key; if (k) nav(`/plan/${k}`); });
+    map.on('click', 'plans-fill', (e) => { const k = e.features?.[0]?.properties?.key; if (k) openRef.current('plan', k); });
     map.on('mouseenter', 'plans-fill', () => (map.getCanvas().style.cursor = 'pointer'));
     map.on('mouseleave', 'plans-fill', () => (map.getCanvas().style.cursor = ''));
     loadBaseStyle('streets').then(({ style }) => map.setStyle(style, { diff: false }));
     mapRef.current = map;
     (window as unknown as { __plansmap: MLMap }).__plansmap = map;
     return () => { map.remove(); mapRef.current = null; };
-  }, [nav]);
+  }, []);
 
   useEffect(() => {
     const map = mapRef.current; if (!map || !ready || !map.getSource('plans')) return;
@@ -74,16 +81,16 @@ export default function PlansMapPage() {
     <Page kicker="מפה" title="כל התכניות על המפה">
       <div className="pm-wrap">
         <aside className="pm-list card">
-          <label className="pm-search">חיפוש לפי מספר או שם<input className="input" value={q} onChange={(e) => setSp(e.target.value ? { q: e.target.value } : {}, { replace: true })} placeholder="603-... או שם" aria-label="חיפוש תכנית" /></label>
-          <div className="pm-legend">{GROUPS.map((g) => <span key={g} className="lg-item"><span className="sw-line" style={{ background: STATUS_GROUP_COLOR[g] }} />{STATUS_GROUP_LABEL[g]}</span>)}</div>
+          <label className="pm-search">חיפוש לפי מספר או שם<input className="input" value={q} onChange={(e) => { const n = new URLSearchParams(sp); if (e.target.value) n.set('q', e.target.value); else n.delete('q'); setSp(n, { replace: true }); }} placeholder="603-... או שם" aria-label="חיפוש תכנית" /></label>
+          <div className="pm-legend">{GROUPS.map((g) => <span key={g} className="lg-item"><span className={`sw-line sw-${g}`} />{STATUS_GROUP_LABEL[g]}</span>)}</div>
           <ul data-testid="plans-list">
             {shown.map((p) => (
               <li key={p.id} onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover(null)}>
-                <Link to={`/plan/${planKey(p)}`}>
+                <button type="button" className={kind === 'plan' && key === planKey(p) ? 'on' : ''} onClick={() => open('plan', planKey(p))}>
                   <span className="mono">{p.plan_number}</span>
                   <span className="pm-name">{p.name}</span>
-                  <span className="chip" style={{ borderColor: STATUS_GROUP_COLOR[statusGroup(p.status)] }}>{STATUS_GROUP_LABEL[statusGroup(p.status)]}</span>
-                </Link>
+                  <span className={`chip status-${statusGroup(p.status)}`}>{STATUS_GROUP_LABEL[statusGroup(p.status)]}</span>
+                </button>
               </li>
             ))}
           </ul>
@@ -92,7 +99,6 @@ export default function PlansMapPage() {
         </aside>
         <div className="pm-map"><div ref={box} className="pmap" data-testid="plans-map" /></div>
       </div>
-      <NextStep to="/add" label="הוספת תכנית" why="תכנית שעוד לא במפה: מספר, קו כחול, קבצים ונתונים" />
     </Page>
   );
 }

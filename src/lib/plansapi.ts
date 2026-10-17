@@ -8,7 +8,8 @@ export interface PlanLayerRow { id: string; plan_id: string; kind: LayerKind; ge
 
 export type StatusGroup = 'approved' | 'process' | 'prep' | 'other';
 export const STATUS_GROUP_LABEL: Record<StatusGroup, string> = { approved: 'מאושרת', process: 'בהליך', prep: 'בהכנה', other: 'לא בתוקף' };
-export const STATUS_GROUP_COLOR: Record<StatusGroup, string> = { approved: '#1f4fbf', process: '#3d8bf0', prep: '#8fb8f5', other: '#9aa3ad' };
+// Blue is kept for the blue line (the plan boundary) only; status is told by line style and by text
+export const BLUE_LINE = '#1d4ed8';
 export function statusGroup(s: Plan['status']): StatusGroup {
   if (s === 'approved') return 'approved';
   if (s === 'deposited') return 'process';

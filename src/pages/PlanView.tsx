@@ -11,7 +11,7 @@ import { docUrl } from '../lib/docfile';
 import { pdfFirstPageToPng } from '../lib/pdfimage';
 import PlanMap3D, { type MapLayerData } from '../components/PlanMap3D';
 import { demandFromUnits, GapLegend, GapRow, gapRows } from '../components/GapBars';
-import { Loading, NextStep, Page } from '../components/ui';
+import { Loading, Page } from '../components/ui';
 import type { Doc } from './Documents';
 
 const ORDER: LayerKind[] = ['blue_line', 'land_use', 'building_lines', 'demolish', 'existing', 'proposed', 'tashrit'];
@@ -36,6 +36,8 @@ export default function PlanViewPage() {
   const [drawing, setDrawing] = useState(false);
   const [pts, setPts] = useState<number[][]>([]);
   const [floors, setFloors] = useState('8');
+  const [show, setShow] = useState({ envelope: true, volume: true });
+  const [orbit, setOrbit] = useState(false);
 
   const load = useCallback(async () => {
     if (!plan) return;
@@ -50,15 +52,16 @@ export default function PlanViewPage() {
 
   // the blue line falls back to the plan's boundary when there is no layer row
   const mapLayers = useMemo<MapLayerData[]>(() => {
-    const out: MapLayerData[] = layers.filter((l) => l.geojson).map((l) => ({ kind: l.kind, geojson: l.geojson }));
+    const out: MapLayerData[] = layers.filter((l) => l.geojson?.features?.length).map((l) => ({ kind: l.kind, geojson: l.geojson }));
     if (!out.some((l) => l.kind === 'blue_line') && plan?.boundary) out.push({ kind: 'blue_line', geojson: { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: plan.boundary, properties: {} }] } });
     return out;
   }, [layers, plan]);
+  const hasEnv = useMemo(() => !!layers.find((l) => l.kind === 'proposed')?.geojson?.features.some((f) => f.properties?.kind === 'envelope'), [layers]);
   const bbox = useMemo(() => bboxOfFC(mapLayers.find((l) => l.kind === 'blue_line')?.geojson ?? null), [mapLayers]);
 
   if (loading) return <main className="page"><Loading error={error} /></main>;
   if (num === 'new' || UUID.test(num)) return <Navigate to={`/tools/check/${num}`} replace />;
-  if (!plan) return <Page title="תכנית לא נמצאה"><div className="notice">אין במערכת תכנית במספר {decodeURIComponent(num)}.</div><NextStep to="/add" label="הוספת תכנית" /></Page>;
+  if (!plan) return <Page title="תכנית לא נמצאה"><div className="notice">אין במערכת תכנית במספר {decodeURIComponent(num)}.</div></Page>;
 
   const g = statusGroup(plan.status);
   const district = districts.find((d) => d.id === plan.district_id);
@@ -111,7 +114,7 @@ export default function PlanViewPage() {
 
   return (
     <Page kicker={`תכנית ${plan.plan_number ?? ''}${plan.mavat_number && plan.mavat_number !== plan.plan_number ? ` · ${plan.mavat_number}` : ''}`} title={plan.name}
-      actions={<><span className={`chip status-${g}`} data-testid="plan-status">{STATUS_GROUP_LABEL[g]}</span>{isMember && <Link className="btn" to={`/plans/${plan.id}`}>תיק התכנית ואישור נתונים</Link>}</>}>
+      actions={<><span className={`chip status-${g}`} data-testid="plan-status">{STATUS_GROUP_LABEL[g]}</span></>}>
       {district && (
         <section className="card gap-card" data-testid="plan-gap">
           <div className="card-head"><h2>מה צריך במתחם {district.id}, מה התכנית עושה, ומה נשאר</h2><GapLegend /></div>
@@ -119,9 +122,14 @@ export default function PlanViewPage() {
           {(() => {
             const net = f('housing', true).value ?? 0;
             const dmd = net > 0 ? demandFromUnits(net, plan.sector === 'haredi' ? 'haredi' : 'general') : null;
-            return gapRows(ledger, domains, plans, [district.id], plan.id).map((r) => (
-              <GapRow key={r.key} r={{ ...r, demand: dmd && r.key === 'education' ? { value: dmd.classes, label: 'ביקוש חדש שהתוספת יוצרת, כיתות' } : dmd && r.key === 'kinder' ? { value: dmd.kinder, label: 'ביקוש חדש שהתוספת יוצרת, כיתות גן' } : null }} />
-            ));
+            // only the domains this plan touches (or creates demand in); the others are named in one line
+            const rows = gapRows(ledger, domains, plans, [district.id], plan.id).map((r) => ({ ...r, demand: dmd && r.key === 'education' ? { value: dmd.classes, label: 'ביקוש חדש שהתוספת יוצרת, כיתות' } : dmd && r.key === 'kinder' ? { value: dmd.kinder, label: 'ביקוש חדש שהתוספת יוצרת, כיתות גן' } : null }));
+            const mine = rows.filter((r) => r.parts.some((x) => x.highlight) || r.demand);
+            const rest = rows.filter((r) => !mine.includes(r));
+            return <>
+              {mine.map((r) => <GapRow key={r.key} r={r} />)}
+              {rest.length > 0 && <div className="ls" data-testid="gap-rest">התכנית אינה מוסיפה ל: {rest.map((r) => r.title).join(', ')}.</div>}
+            </>;
           })()}
           <div className="ls">ביקוש חדש: תוספת הדירות כפול גודל משק בית ושיעור שנתון (מסמך המדיניות, טיוטה), 30 תלמידים בכיתה (הנחת עבודה).</div>
         </section>
@@ -133,10 +141,16 @@ export default function PlanViewPage() {
               <button type="button" role="tab" aria-selected={mode === '2d'} className={mode === '2d' ? 'on' : ''} onClick={() => setMode('2d')}>דו-ממד</button>
               <button type="button" role="tab" aria-selected={mode === '3d'} className={mode === '3d' ? 'on' : ''} onClick={() => setMode('3d')}>תלת-ממד</button>
             </div>
+            {mode === '3d' && hasEnv && <div className="seg" aria-label="מה מוצג בתלת-ממד">
+              <button type="button" aria-pressed={show.envelope} className={show.envelope ? 'on' : ''} onClick={() => setShow((x) => ({ ...x, envelope: !x.envelope }))}>מעטפת מותרת</button>
+              <button type="button" aria-pressed={show.volume} className={show.volume ? 'on' : ''} onClick={() => setShow((x) => ({ ...x, volume: !x.volume }))}>נפח לדוגמה</button>
+            </div>}
+            {mode === '3d' && <button type="button" className={`btn small ${orbit ? 'on' : ''}`} aria-pressed={orbit} onClick={() => setOrbit((o) => !o)}>{orbit ? 'עצירת הסיבוב' : 'סיבוב סביב התכנית'}</button>}
             {tl && <label className="pv-opacity">שקיפות התשריט<input type="range" min={0} max={1} step={0.05} value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} aria-label="שקיפות התשריט" /></label>}
           </div>
           <PlanMap3D layers={mapLayers} visible={visible} mode={mode} bbox={bbox} tashrit={tl?.image_bounds && tUrl ? { url: tUrl, bounds: tl.image_bounds, opacity } : null}
-            drawing={drawing} onDrawPoint={(p) => setPts((x) => [...x, p])} draft={pts} />
+            drawing={drawing} onDrawPoint={(p) => setPts((x) => [...x, p])} draft={pts} show={show} orbit={orbit} />
+          {mode === '3d' && <div className="ls">{hasEnv ? 'מעטפת מותרת: קווי הבניין כפול הגובה המרבי, בזכוכית בהירה. נפח לדוגמה: בסיס ומגדל מחושבים משטחי טבלה 5, מחולקים לקומות.' : 'נפח מקורב: מגרש המגורים בגובה הקומות המותר.'} לחיצה על מבנה מציגה את נתוניו.</div>}
           <ul className="pv-layers" data-testid="layer-list">
             {kindsHere.map((k) => (
               <li key={k}>
@@ -192,6 +206,7 @@ export default function PlanViewPage() {
             </dl>
             {plan.note && <div className="ls">{plan.note}</div>}
             {plan.status_note && <div className="ls">{plan.status_note}</div>}
+            {isMember && <Link className="linklike ls" to={`/plans/${plan.id}`}>עריכת הנתונים בתיק התכנית</Link>}
           </section>
           <section className="card" data-testid="plan-sources">
             <div className="card-head"><h2>מסמכי מקור</h2></div>
@@ -204,7 +219,6 @@ export default function PlanViewPage() {
           </section>
         </aside>
       </div>
-      <NextStep to="/compare" label="השוואה ליעד" why="מה התכנית תורמת ליעד המתחם, ומה עוד חסר" />
     </Page>
   );
 }
