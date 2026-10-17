@@ -68,7 +68,6 @@ export async function loadBaseStyle(key: BaseKey): Promise<{ style: StyleSpecifi
       const v = src as { type: string; attribution?: string };
       if (v.type === 'vector' && !v.attribution) v.attribution = '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> © OpenMapTiles © OpenStreetMap contributors';
     }
-    ensureRtlPlugin();
     cache.set(key, s);
     return { style: s, fellBack: false };
   } catch {

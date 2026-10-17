@@ -8,7 +8,7 @@ import { useAuth } from '../lib/auth';
 import { fmt, PLAN_STATUS_LABEL } from '../lib/data';
 import { CertaintyChip, GATE_LABEL, StatusChip } from './ui';
 import type { Status } from '../lib/rules';
-import { BASEMAPS, EMPTY_STYLE, loadBaseStyle, PLAIN_STYLE, type BaseKey } from '../lib/basemaps';
+import { BASEMAPS, EMPTY_STYLE, ensureRtlPlugin, loadBaseStyle, PLAIN_STYLE, type BaseKey } from '../lib/basemaps';
 import { plannedFor, TOPICS, type TopicKey } from '../lib/topics';
 import { toInput } from '../lib/data';
 
@@ -189,7 +189,8 @@ export default function MapView({ full = false, focus }: { full?: boolean; focus
         styleOk.current = false;
         map.setStyle(PLAIN_STYLE, { diff: false });
       }, 9000);
-      map.once('style.load', () => { window.clearTimeout(t); map.off('error', onErr); });
+      // Hebrew shaping plugin only after the style has loaded, so it can never hold the map back
+      map.once('style.load', () => { window.clearTimeout(t); map.off('error', onErr); if (base === 'streets') map.once('idle', () => ensureRtlPlugin()); });
     });
     return () => { live = false; };
   }, [base]);
