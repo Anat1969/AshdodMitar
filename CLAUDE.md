@@ -59,6 +59,17 @@ Commit and push. If a work branch is required: PR, then merge to `main` immediat
 - Map diagnostics: `?debug=1` shows map errors; `?rtl=0` disables the Hebrew text plugin.
 - Verifying the live map: the container cannot reach tile servers. Use the Apify actor `apify/screenshot-url` on the production URL (viewportWidth ~800 keeps the PNG small enough to view).
 
+## Realisation ledger (מאזן מימוש), added 2026-10-17
+- Goal: at any moment, where the city stands against the master plan's targets, per district and domain, and what to plan next.
+- remaining = target - existing - sum(approved plans). Only quantities with status `approved` count. Plans `pipeline`/`deposited` are a separate scenario, never in the total. A plan approved on or before `mt_targets.existing_date` is already inside existing ("כלול בקיים") and is not added again. Unknown existing => "חסר קיים" (shows target minus plans), never zero.
+- Unit of targets: the plan's 9 districts (מתחמים), not the 36 quarters (רובעים). The plan sets quantities per מתחם.
+- Tables: `mt_domains` (domains, can add), `mt_targets` (target + existing per district and domain, with source, page, certainty, date), `mt_plan_quantities` (per plan, district, domain: value, doc, page, quote, split single/table/area, draft/approved, approver), `mt_extractions` (runs). `mt_plans` has `approval_date`, `boundary`, `boundary_source`, `area_m2`. RPC `mt_area_split(boundary)`.
+- Seed (targets were empty): housing target = units_total, existing = units_total - units_added (derived: rights at the plan's base, not built stock). Education/kindergarten from target population (assumption) with existing from the municipal GIS. Open space 3 m2/person. Employment = plan employment area (total vs added unclear in the plan). Public, commerce, roads: missing.
+- Extraction: Edge function `mt-extract` (Claude API, `claude-opus-5-5`, structured JSON, page + quote per number, background with polling). Needs project secret `ANTHROPIC_API_KEY`; until then the button is off with a message and manual entry works.
+- GIS: GeoJSON, KML, zipped SHP; ITM (EPSG:2039) reprojected in `src/lib/gis.ts`; manual drawing in `BoundaryMap`. Cross-district plans: by rights table, else by area, flagged "הערכה".
+- Pages: `/ledger` (city summary, attention list, exports), `/plans`, `/plans/:id` (plan file: details, documents, extraction, approval with the source page, boundary, bill of quantities vs district target), `/targets`, district page ledger table. Lag flag: a public-needs domain more than 15 points behind housing (assumption). Code: `src/lib/ledger.ts` (pure, `tests/ledger.test.ts`).
+- Exports: Excel via SheetJS (RTL sheets, Latin file names), PDF via print.
+
 ## Documents
 - `/documents`: upload any file type (up to 50MB) with name, document date, optional district/plan and note. Table `mt_documents`, private storage bucket `mt-documents`, opened via 5-minute signed URLs. Read: members. Write/delete: editor/admin.
 
@@ -91,3 +102,4 @@ Final URL + one line on what was built. Update this file.
 - 2026-10-17: blank streets map on production: Hebrew RTL plugin off by default (verified with a live screenshot).
 - 2026-10-17: "איך זה עובד" is the opening page and first in the nav.
 - 2026-10-17: every verified fix is saved in the skill, in this file and as a test, so it never comes back.
+- 2026-10-17: upload the documents of every approved plan, extract quantities into fields and the boundary into the map, approval screen with the source page, per-plan bill of quantities vs the target, per-district and city summary (approved, cumulative, remaining), plans in process as a separate scenario. Built as the realisation ledger (above).

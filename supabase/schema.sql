@@ -127,3 +127,30 @@ alter table mt_plans add column if not exists program jsonb default '{}'::jsonb;
 -- staging for OSM lookups
 create table if not exists mt_osm_raw (id text primary key, qname text, osm_type text, osm_id text, name text, category text, type text, geom jsonb, fetched_at timestamptz default now());
 alter table mt_osm_raw enable row level security;
+
+-- Realisation ledger (added 2026-10-17). remaining = target - existing - approved plans.
+create table mt_domains (key text primary key, title text not null, unit text not null, sort int default 100, target_rule text, target_certainty text default 'missing', created_at timestamptz default now());
+create table mt_targets (
+  district_id int not null references mt_districts(id), domain_key text not null references mt_domains(key),
+  target numeric, target_source text, target_page int, target_certainty text default 'missing',
+  existing numeric, existing_date date, existing_source text, existing_certainty text default 'missing',  -- plans approved on/before existing_date are inside existing
+  note text, updated_by text, updated_at timestamptz default now(), primary key (district_id, domain_key));
+-- public read, write editor/admin (same policies as mt_existing)
+alter table mt_plans add column approval_date date, add column boundary jsonb, add column boundary_source text, add column area_m2 numeric;
+create table mt_plan_quantities (
+  id uuid primary key default gen_random_uuid(), plan_id uuid not null references mt_plans(id) on delete cascade,
+  district_id int references mt_districts(id), domain_key text not null references mt_domains(key),
+  value numeric, doc_id uuid references mt_documents(id) on delete set null, page int, quote text,
+  split text default 'single' check (split in ('single','table','area')), share numeric,
+  status text not null default 'draft' check (status in ('draft','approved')),   -- only 'approved' counts
+  origin text default 'manual' check (origin in ('ai','manual')), extraction_id uuid, note text,
+  approved_by text, approved_at timestamptz, created_by text, created_at timestamptz default now(), updated_at timestamptz default now());
+create table mt_extractions (
+  id uuid primary key default gen_random_uuid(), plan_id uuid references mt_plans(id) on delete cascade,
+  doc_id uuid references mt_documents(id) on delete cascade, status text not null default 'queued' check (status in ('queued','running','done','error')),
+  model text, result jsonb, error text, created_by text, created_at timestamptz default now(), finished_at timestamptz);
+-- members read, editor/admin write (mt_role()).
+-- mt_area_split(boundary jsonb) -> {area_m2, parts:[{district_id, area_m2}]}: ST_Intersection with mt_districts.geom on geography. authenticated only.
+-- Seed: mt_targets from mt_districts (plan tables, ch. 4.3): housing target=units_total, existing=units_total-units_added (derived);
+--   education/kinder from target_pop (assumption) with existing from mt_existing; openspace 3 m2/person; employment=employment_m2.
+-- Edge function mt-extract (supabase/functions/mt-extract): Claude API (claude-opus-5-5), needs secret ANTHROPIC_API_KEY.

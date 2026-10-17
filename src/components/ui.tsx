@@ -78,9 +78,10 @@ export function TopicsTable({ cells, isMember, testId }: { cells: Record<TopicKe
   return (
     <div className="table-wrap">
       <table className="table topics" data-testid={testId}>
-        <thead><tr><th>נושא</th><th>קיים</th><th>מתוכנן</th><th>יעד</th><th>פער</th><th>התקדמות</th><th>ודאות היעד</th></tr></thead>
+        <thead><tr><th>נושא</th><th>קיים</th><th>מאושר ובהליך</th><th>יעד</th><th>יתרה</th><th>מימוש</th><th>ודאות היעד</th></tr></thead>
         <tbody>{TOPICS.map((t) => {
           const c = cells[t.key];
+          if (!c) return null;
           const p = c.progress;
           return (
             <tr key={t.key} data-topic={t.key}>

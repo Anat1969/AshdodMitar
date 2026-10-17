@@ -8,9 +8,10 @@ import { toInput } from '../lib/data';
 import MapView from '../components/MapView';
 import { CertaintyChip, Disclaimer, Gauge, Loading, StatusChip, TopicsTable } from '../components/ui';
 import { TOPICS, type TopicCell, type TopicKey } from '../lib/topics';
+import { cityCell, type Ledger } from '../lib/ledger';
 
 export default function Home() {
-  const { city, districts, plans, gates, renewal, loading, error, matrix } = useStore();
+  const { city, districts, plans, gates, renewal, loading, error, ledger } = useStore();
   const { isMember } = useAuth();
   if (loading || !city) return <main className="page"><Loading error={error} /></main>;
 
@@ -51,8 +52,8 @@ export default function Home() {
       </section>
 
       <section className="card">
-        <div className="card-head"><h2>העיר לפי נושאים: קיים, מתוכנן ויעד</h2><Link className="btn small" to="/">איך זה מחושב</Link></div>
-        <TopicsTable cells={cityCells(matrix)} isMember={isMember} testId="city-topics" />
+        <div className="card-head"><h2>העיר לפי נושאים: קיים, מתוכנן ויעד</h2><div className="row-actions"><Link className="btn small" to="/ledger">מאזן מימוש מלא</Link><Link className="btn small" to="/">איך זה מחושב</Link></div></div>
+        <TopicsTable cells={cityCells(ledger)} isMember={isMember} testId="city-topics" />
       </section>
 
       <section className="home-map card">
@@ -82,17 +83,10 @@ export default function Home() {
   );
 }
 
-function cityCells(matrix: Record<number, Record<TopicKey, TopicCell>>): Record<TopicKey, TopicCell> {
-  const ds = Object.values(matrix);
-  const sum = (vals: (number | null)[]) => (vals.some((v) => v != null) ? vals.reduce<number>((a, v) => a + (v ?? 0), 0) : null);
+function cityCells(ledger: Ledger): Record<TopicKey, TopicCell> {
   return Object.fromEntries(TOPICS.map((t) => {
-    const cells = ds.map((d) => d[t.key]);
-    const existing = sum(cells.map((c) => c.existing));
-    const planned = cells.reduce((a, c) => a + c.planned, 0);
-    const target = sum(cells.map((c) => c.target));
-    const supply = t.key === 'housing' ? planned : (existing ?? 0) + planned;
-    const progress = target ? +(Math.min(9.99, supply / target)).toFixed(3) : null;
-    const cell: TopicCell = { existing, planned, approved: cells.reduce((a, c) => a + c.approved, 0), target, gap: target == null ? null : Math.max(0, target - supply), progress, certainty: t.targetCertainty, existingSource: cells.find((c) => c.existingSource)?.existingSource ?? null };
+    const c = cityCell(ledger, t.key);
+    const cell: TopicCell = { existing: c.existing, planned: c.approved + c.scenario, approved: c.approved, target: c.target, gap: c.remaining, progress: c.progress, certainty: t.targetCertainty, existingSource: null };
     return [t.key, cell];
   })) as Record<TopicKey, TopicCell>;
 }

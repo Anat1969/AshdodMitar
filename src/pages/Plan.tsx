@@ -8,7 +8,7 @@ import { checkPlan, districtGate } from '../lib/rules';
 import { CertaintyChip, Loading, Page, RuleCard, StatusChip } from '../components/ui';
 import { billOfQuantities, BOQ_LABEL, type Program } from '../lib/topics';
 
-type Form = Omit<Plan, 'id' | 'location' | 'is_example' | 'data_certainty'> & { id?: string };
+type Form = Omit<Plan, 'id' | 'location' | 'is_example' | 'data_certainty' | 'approval_date' | 'boundary' | 'boundary_source' | 'area_m2'> & { id?: string };
 const blank = (district: number | null): Form => ({
   plan_number: '', name: '', district_id: district, status: 'pipeline', sector: 'general', fabric: 'existing', is_renewal: false,
   units_added: 0, mix: { small: 0, medium: 0, rest: 0, restAvgArea: 0 }, added_above_ground_m2: null, public_built_m2: null,
