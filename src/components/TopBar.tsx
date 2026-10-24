@@ -1,10 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../lib/auth';
 import { LINKS } from '../lib/supabase';
 
-interface BIPEvent extends Event { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> }
+interface MenuElement extends HTMLElement {
+  items: { label: string; hint?: string; onSelect: () => unknown }[];
+  status: string;
+}
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace JSX {
+    interface IntrinsicElements {
+      'ai-menu': React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & { chat?: string; research?: string };
+    }
+  }
+}
 
 export default function TopBar() {
   const { session, role, ready, googleEnabled, emailEnabled, signInGoogle, sendLink, signInWithPastedLink, signOut, justSignedIn, dismissSignedIn } = useAuth();
@@ -12,30 +24,29 @@ export default function TopBar() {
   const [pasteMsg, setPasteMsg] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const loc = useLocation();
-  const [copied, setCopied] = useState(false);
-  const [install, setInstall] = useState<BIPEvent | null>(null);
-  const [installed, setInstalled] = useState(false);
+  const menuRef = useRef<MenuElement>(null);
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    const h = (e: Event) => { e.preventDefault(); setInstall(e as BIPEvent); };
-    const done = () => { setInstall(null); setInstalled(true); };
-    window.addEventListener('beforeinstallprompt', h);
-    window.addEventListener('appinstalled', done);
-    if (window.matchMedia?.('(display-mode: standalone)').matches) setInstalled(true);
-    return () => { window.removeEventListener('beforeinstallprompt', h); window.removeEventListener('appinstalled', done); };
-  }, []);
   useEffect(() => { setOpen(false); }, [loc.pathname]);
   useEffect(() => { if (!justSignedIn) return; const t = setTimeout(dismissSignedIn, 9000); return () => clearTimeout(t); }, [justSignedIn, dismissSignedIn]);
 
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(window.location.href); } catch { /* clipboard blocked */ }
-    setCopied(true); setTimeout(() => setCopied(false), 1800);
-  };
-
   const roleLabel = role === 'admin' ? 'מנהלת' : role === 'editor' ? 'עורך' : role === 'viewer' ? 'צופה' : session ? 'לא חבר צוות' : null;
+
+  // A&I logo button (https://appofapp-gh.vercel.app/ai-menu.js): copy link, dev chat, research and install come from it;
+  // the account actions are its items, and the account drawer below opens from there.
+  useEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    el.items = session
+      ? [
+          { label: 'חשבון', hint: roleLabel ?? undefined, onSelect: () => setOpen(true) },
+          { label: 'יציאה', onSelect: async () => { await signOut(); setOpen(false); } },
+        ]
+      : [{ label: 'כניסה לחשבון', hint: 'קישור במייל', onSelect: () => setOpen(true) }];
+    el.status = roleLabel ?? '';
+  }, [session, roleLabel, signOut]);
 
   return (
     <>
@@ -54,9 +65,7 @@ export default function TopBar() {
             <NavLink to="/tools" className={({ isActive }) => (isActive || /^\/(tools|about|overview|ledger|plans|targets|district|documents|rules|register|report)/.test(loc.pathname) ? 'active' : '')}>כלים נוספים</NavLink>
           </nav>
           <div className="tb-actions">
-            <button type="button" className={`btn small sys-btn ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} aria-expanded={open} aria-controls="sys-panel">
-              מערכת{roleLabel ? <span className="sys-role">{roleLabel}</span> : null}
-            </button>
+            <ai-menu ref={menuRef} chat={LINKS.devChat} research={LINKS.research} />
           </div>
         </div>
       </header>
@@ -72,21 +81,8 @@ export default function TopBar() {
       </AnimatePresence>
       <AnimatePresence>
         {open && (
-          <motion.div id="sys-panel" className="drawer sys-panel" role="dialog" aria-label="מערכת" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+          <motion.div id="sys-panel" className="drawer sys-panel" role="dialog" aria-label="חשבון" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
             <div className="drawer-body">
-              <section className="sys-group">
-                <h3 className="sys-h">שיתוף ופיתוח</h3>
-                <div className="sys-grid">
-                  <button type="button" className="btn" onClick={copy}>{copied ? 'הקישור הועתק' : 'העתקת קישור'}</button>
-                  <a className="btn" href={LINKS.devChat} target="_blank" rel="noreferrer">שיחת הפיתוח</a>
-                  <a className="btn" href={LINKS.research} target="_blank" rel="noreferrer">פרויקט המחקר</a>
-                  {install
-                    ? <button type="button" className="btn primary" onClick={async () => { await install.prompt(); setInstall(null); }}>התקנת האפליקציה</button>
-                    : <button type="button" className="btn" disabled title={installed ? 'האפליקציה מותקנת' : 'Chrome יציע התקנה כשהדף עומד בתנאים'}>{installed ? 'האפליקציה מותקנת' : 'התקנת האפליקציה'}</button>}
-                </div>
-                <div className="ls">העתקת קישור שומרת גם את המצב: מתחם, שכבות, צביעה ורקע.</div>
-              </section>
-
               <section className="sys-group">
                 <h3 className="sys-h">חשבון</h3>
                 {session ? (
