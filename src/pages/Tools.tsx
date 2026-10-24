@@ -24,7 +24,7 @@ export default function ToolsPage() {
       <ul className="tools-list" data-testid="tools-list">
         {TOOLS.map((t) => <li key={t.to} className="card"><Link to={t.to}><b>{t.title}</b></Link><span>{t.purpose ?? 'מטרה לא מוגדרת'}</span></li>)}
       </ul>
-      <div className="ls">כפתורי "העתקת קישור", "שיחת הפיתוח", "פרויקט המחקר", התקנה וחשבון נמצאים בכפתור "מערכת" בסרגל העליון.</div>
+      <div className="ls">כפתורי "העתקת קישור", "שיחת הפיתוח", "פרויקט המחקר", התקנה וחשבון נמצאים בכפתור הלוגו "אד' ענת שטיבלמן A&I" בסרגל העליון.</div>
     </Page>
   );
 }

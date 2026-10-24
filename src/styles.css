@@ -59,9 +59,6 @@ h3 { font-size: 16px; font-weight: 600; }
 textarea.input { min-height: 70px; resize: vertical; }
 
 /* system menu */
-.sys-btn { gap: 8px; }
-.sys-btn .sys-role { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--line-2); color: var(--ink-3); }
-.sys-btn.on .sys-role { background: rgba(255,255,255,0.18); color: #fff; }
 .sys-panel { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - var(--top) - 24px); overflow: auto; }
 .sys-group { display: grid; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line-2); }
 .sys-group p { margin: 0; }

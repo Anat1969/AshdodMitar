@@ -23,6 +23,8 @@ async function mock(page: Page, opts: { admin: boolean; noSession?: boolean }) {
     const req = route.request();
     const url = new URL(req.url());
     if (url.hostname === 'localhost') return route.continue();
+    // ai-menu.js: AI_MENU_JS points to a local copy when the network is closed
+    if (url.href === 'https://appofapp-gh.vercel.app/ai-menu.js') return process.env.AI_MENU_JS ? route.fulfill({ path: process.env.AI_MENU_JS, contentType: 'application/javascript' }) : route.continue();
     if (url.hostname.endsWith('supabase.co')) {
       if (url.pathname.startsWith('/storage/v1/')) {
         writes.push({ method: req.method(), table: 'storage:' + url.pathname.replace('/storage/v1/', ''), body: req.method() === 'DELETE' ? req.postDataJSON() : null, url: req.url() });
@@ -140,8 +142,10 @@ test('anonymous: home, map layers, district card, no members data', async ({ pag
   await expect(page.locator('input[data-layer="transit"]')).toBeDisabled();
   await page.screenshot({ path: SHOTS + 'anon-home.png', fullPage: true });
   // login drawer shows Google-off message and no password field
-  await expect(page.locator('.sys-btn')).toHaveText('מערכת');
-  await page.locator('.sys-btn').click();
+  await expect(page.locator('ai-menu .logo')).toBeVisible();
+  await expect(page.locator('header').getByText('העתקת קישור')).toHaveCount(0);
+  await page.locator('ai-menu .logo').click();
+  await page.getByRole('menuitem', { name: /כניסה לחשבון/ }).click();
   await expect(page.locator('#sys-panel')).toBeVisible();
   await expect(page.getByText('כניסה עם Google עדיין לא הופעלה')).toBeVisible();
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
@@ -199,9 +203,9 @@ test('map page: every layer toggle, themes, district selection, copy link', asyn
   await expect(page.locator('.map-label[data-district="2"]')).toContainText('חינוך יסודי');
   await page.waitForTimeout(1200);
   await page.screenshot({ path: SHOTS + 'map-layers.png' });
-  await page.locator('.sys-btn').click();
-  await page.getByRole('button', { name: 'העתקת קישור' }).click();
-  await expect(page.getByRole('button', { name: 'הקישור הועתק' })).toBeVisible();
+  await page.locator('ai-menu .logo').click();
+  await page.getByRole('menuitem', { name: /העתקת קישור/ }).click();
+  await expect(page.getByText('הקישור הועתק')).toBeVisible();
   const clip = await page.evaluate(() => navigator.clipboard.readText());
   expect(clip).toContain('d=2');
   expect(clip).toContain('layers=');
@@ -217,12 +221,14 @@ test('map page: every layer toggle, themes, district selection, copy link', asyn
 test('admin: top bar links, district edit, plan create + decision, rules, register, report', async ({ page }) => {
   const { writes } = await mock(page, { admin: true });
   await page.goto('/overview');
-  await expect(page.locator('.sys-btn')).toContainText('מנהלת');
-  await page.locator('.sys-btn').click();
-  await expect(page.getByRole('button', { name: 'התקנת האפליקציה' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'העתקת קישור' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'שיחת הפיתוח' })).toHaveAttribute('href', /claude\.ai\/code\/session_/);
-  await expect(page.getByRole('link', { name: 'פרויקט המחקר' })).toHaveAttribute('href', /claude\.ai/);
+  await expect(page.locator('ai-menu .status')).toHaveText('מנהלת');
+  await page.locator('ai-menu .logo').click();
+  await expect(page.getByRole('menuitem', { name: /התקנת האפליקציה/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /העתקת קישור/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'שיחת הפיתוח' })).toHaveAttribute('href', /claude\.ai\/code\/session_/);
+  await expect(page.getByRole('menuitem', { name: 'פרויקט המחקר' })).toHaveAttribute('href', /claude\.ai/);
+  await page.getByRole('menuitem', { name: /חשבון/ }).click();
+  await expect(page.locator('#sys-panel')).toBeVisible();
   await page.locator('#sys-panel').getByRole('button', { name: 'סגירה' }).click();
   await expect(page.locator('#sys-panel')).toHaveCount(0);
   // brand goes home
@@ -350,15 +356,16 @@ test('admin: top bar links, district edit, plan create + decision, rules, regist
   await page.screenshot({ path: SHOTS + 'report.png', fullPage: true });
 
   // sign out from drawer
-  await page.locator('.sys-btn').click();
-  await page.getByRole('button', { name: 'יציאה' }).click();
-  await expect(page.locator('.sys-btn')).toHaveText('מערכת');
+  await page.locator('ai-menu .logo').click();
+  await page.getByRole('menuitem', { name: 'יציאה' }).click();
+  await expect(page.locator('ai-menu .status')).toHaveText('');
 });
 
 test('magic link request sends otp for typed email', async ({ page }) => {
   const { writes } = await mock(page, { admin: false });
   await page.goto('/');
-  await page.locator('.sys-btn').click();
+  await page.locator('ai-menu .logo').click();
+  await page.getByRole('menuitem', { name: /כניסה לחשבון/ }).click();
   await page.getByLabel('כתובת דואר').fill('someone@ashdod.muni.il');
   await page.getByRole('button', { name: 'שליחת קישור כניסה' }).click();
   await expect(page.getByText('נשלח קישור כניסה')).toBeVisible();
@@ -400,7 +407,7 @@ test('requests made on home are only to allowed hosts', async ({ page }) => {
   await mock(page, { admin: false });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
-  for (const h of hosts) expect(['localhost', `${REF}.supabase.co`, 'a.basemaps.cartocdn.com', 'b.basemaps.cartocdn.com', 'tiles.openfreemap.org', 'server.arcgisonline.com', 'fonts.googleapis.com', 'fonts.gstatic.com']).toContain(h);
+  for (const h of hosts) expect(['localhost', `${REF}.supabase.co`, 'a.basemaps.cartocdn.com', 'b.basemaps.cartocdn.com', 'tiles.openfreemap.org', 'server.arcgisonline.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'appofapp-gh.vercel.app']).toContain(h);
 });
 
 test('documents: upload any file with name and date, open, delete, members only', async ({ page }) => {
@@ -446,7 +453,8 @@ test('sign-in by pasting the emailed link or the dead-end address, then a clear 
   // reads of mt_members return admin once a session exists
   const { writes } = await mock(page, { admin: true, noSession: true });
   await page.goto('/');
-  await page.locator('.sys-btn').click();
+  await page.locator('ai-menu .logo').click();
+  await page.getByRole('menuitem', { name: /כניסה לחשבון/ }).click();
   await page.getByLabel('כתובת דואר').fill('shtanat5@gmail.com');
   await page.getByRole('button', { name: 'שליחת קישור כניסה' }).click();
   await expect(page.locator('.paste-login.lit')).toBeVisible();
@@ -464,14 +472,15 @@ test('sign-in by pasting the emailed link or the dead-end address, then a clear 
   await expect(page.getByTestId('signed-banner')).toContainText('מחוברת');
   await expect(page.getByTestId('signed-banner')).toContainText('shtanat5@gmail.com');
   await expect(page.getByTestId('signed-banner')).toContainText('הרשאה: מנהלת');
-  await expect(page.locator('.sys-btn')).toContainText('מנהלת');
+  await expect(page.locator('ai-menu .status')).toHaveText('מנהלת');
   await page.screenshot({ path: SHOTS + 'signed-in.png' });
   await page.getByTestId('signed-banner').getByRole('button', { name: 'סגירה' }).click();
   await expect(page.getByTestId('signed-banner')).toHaveCount(0);
   // sign out, then the original email link (verify?token=…)
-  await page.locator('.sys-btn').click();
-  await page.getByRole('button', { name: 'יציאה' }).click();
-  await page.locator('.sys-btn').click();
+  await page.locator('ai-menu .logo').click();
+  await page.getByRole('menuitem', { name: 'יציאה' }).click();
+  await page.locator('ai-menu .logo').click();
+  await page.getByRole('menuitem', { name: /כניסה לחשבון/ }).click();
   await page.getByLabel('קישור הכניסה מהמייל').fill('https://cbhexpybdggwzyakgagd.supabase.co/auth/v1/verify?token=pkce_abc123&type=magiclink&redirect_to=http://localhost:3000');
   await page.getByRole('button', { name: 'כניסה עם הקישור' }).click();
   await expect(page.getByTestId('signed-banner')).toContainText('הרשאה: מנהלת');
