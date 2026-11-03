@@ -109,6 +109,7 @@ The full registry, with symptom, fix and verification, is in `skills/end-to-end-
 ## Delivery
 Final URL + one line on what was built. Update this file.
 - Production: https://ashdod-mitar-twin.vercel.app (Vercel project `ashdod-mitar-twin`, deploys from `main`).
+- Direct GitHub link (works when the Vercel quota is used up): https://raw.githack.com/Anat1969/AshdodMitar/main/app/index.html . `npm run build:github` builds `app/` with `--base=./` and `VITE_HASH_ROUTER=1` (HashRouter, no service worker; Vercel build unchanged). `.github/workflows/build-app.yml` rebuilds and commits `app/` on every push to main. `vercel.json` `ignoreCommand` skips a commit that changes only `app/`; `claude/*` branches do not deploy. Public files use `import.meta.env.BASE_URL` (`publicUrl` in `src/lib/docfile.ts`), never a bare `/`. Deep links: `app/index.html#/plan/603-0380584`.
 
 ## Corrections log
 - 2026-10-16: show the real Ashdod map under the markings, using a free API (done: OpenFreeMap, Esri imagery, CARTO).
@@ -131,6 +132,7 @@ Final URL + one line on what was built. Update this file.
 - `src/components/StreetWalk.tsx`: lon/lat to metres around the blue line's centre. "היום" = existing + demolish (red). "לפי התכנית" = existing + proposed volumes, envelope as glass. Missing heights use the 3D map's own defaults (9 m existing, 30 m proposed), stated as an assumption in the rule on screen.
 - Test: `e2e/app.spec.ts` "on the street" with `WALK_JS=<local walk.js>`. The installability test fails with full Chromium here (`in-incognito`), not from this change.
 - Corrections log: 2026-11-03 street view added at Anat's request to spread the eye-height walk (from a reel on spaceplanner.co).
+- Corrections log: 2026-11-03 direct GitHub link (`app/`, raw.githack), Anat's standing rule, because the Vercel quota was blocked.
 - Corrections log: 2026-11-03 municipal street layer (rehevot.shp) and "רחובות התכנית" on the plan page: from which street the plan is entered.
 
 ## Plan streets (רחובות התכנית), 2026-11-03
