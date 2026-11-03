@@ -20,7 +20,7 @@ export function ensureRtlPlugin() {
   if (new URLSearchParams(window.location.search).get('rtl') !== '1') return;
   rtlRequested = true;
   try {
-    if (maplibregl.getRTLTextPluginStatus() === 'unavailable') void maplibregl.setRTLTextPlugin(new URL('/vendor/mapbox-gl-rtl-text-0.2.3.min.js', window.location.origin).href, true);
+    if (maplibregl.getRTLTextPluginStatus() === 'unavailable') void maplibregl.setRTLTextPlugin(new URL(`${import.meta.env.BASE_URL}vendor/mapbox-gl-rtl-text-0.2.3.min.js`, window.location.href).href, true);
   } catch { /* labels fall back to unshaped text */ }
 }
 

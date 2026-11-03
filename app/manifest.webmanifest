@@ -1,0 +1,17 @@
+{
+  "name": "תאום מתאר אשדוד",
+  "short_name": "תאום מתאר",
+  "description": "כלי תומך החלטה לתכנית המתאר הכוללנית של אשדוד",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#eef0f2",
+  "theme_color": "#15181d",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
