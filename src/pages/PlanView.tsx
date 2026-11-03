@@ -11,6 +11,8 @@ import { docUrl } from '../lib/docfile';
 import { pdfFirstPageToPng } from '../lib/pdfimage';
 import PlanMap3D, { type MapLayerData } from '../components/PlanMap3D';
 import StreetWalk from '../components/StreetWalk';
+import PlanStreets from '../components/PlanStreets';
+import { boundaryOf, planStreets, type PlanStreetsResult } from '../lib/planStreets';
 import { demandFromUnits, GapLegend, GapRow, gapRows } from '../components/GapBars';
 import { Loading, Page } from '../components/ui';
 import type { Doc } from './Documents';
@@ -61,6 +63,17 @@ export default function PlanViewPage() {
   }, [layers, plan]);
   const hasEnv = useMemo(() => !!layers.find((l) => l.kind === 'proposed')?.geojson?.features.some((f) => f.properties?.kind === 'envelope'), [layers]);
   const bbox = useMemo(() => bboxOfFC(mapLayers.find((l) => l.kind === 'blue_line')?.geojson ?? null), [mapLayers]);
+  // municipal street centrelines (public/geo), read once; the plan's streets are computed from its blue line
+  const [streetsFC, setStreetsFC] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [streetsErr, setStreetsErr] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch(`${import.meta.env.BASE_URL}geo/ashdod-streets.geojson`).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((j) => { if (live) setStreetsFC(j); }).catch((e) => { if (live) setStreetsErr((e as Error).message); });
+    return () => { live = false; };
+  }, []);
+  const blueGeo = mapLayers.find((l) => l.kind === 'blue_line')?.geojson ?? null;
+  const streetsRes = useMemo<PlanStreetsResult | null>(() => (streetsFC ? planStreets(boundaryOf(blueGeo), streetsFC) : null), [streetsFC, blueGeo]);
 
   if (loading) return <main className="page"><Loading error={error} /></main>;
   if (num === 'new' || UUID.test(num)) return <Navigate to={`/tools/check/${num}`} replace />;
@@ -153,7 +166,7 @@ export default function PlanViewPage() {
             {tl && <label className="pv-opacity">שקיפות התשריט<input type="range" min={0} max={1} step={0.05} value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} aria-label="שקיפות התשריט" /></label>}
           </div>
           {walk ? <StreetWalk layers={mapLayers} bbox={bbox} title={`${plan.plan_number ?? ''} ${plan.name ?? ''}`.trim()} /> : <PlanMap3D layers={mapLayers} visible={visible} mode={mode} bbox={bbox} tashrit={tl?.image_bounds && tUrl ? { url: tUrl, bounds: tl.image_bounds, opacity } : null}
-            drawing={drawing} onDrawPoint={(p) => setPts((x) => [...x, p])} draft={pts} show={show} orbit={orbit} />}
+            drawing={drawing} onDrawPoint={(p) => setPts((x) => [...x, p])} draft={pts} show={show} orbit={orbit} streets={streetsRes?.features ?? null} />}
           {walk && <div className="ls">ברחוב: השכבות של התכנית בגובה העיניים. "היום" מול "לפי התכנית", עם הנפח לדוגמה ובזכוכית המעטפת המותרת.</div>}
           {!walk && mode === '3d' && <div className="ls">{hasEnv ? 'מעטפת מותרת: קווי הבניין כפול הגובה המרבי, בזכוכית בהירה. נפח לדוגמה: בסיס ומגדל מחושבים משטחי טבלה 5, מחולקים לקומות.' : 'נפח מקורב: מגרש המגורים בגובה הקומות המותר.'} לחיצה על מבנה מציגה את נתוניו.</div>}
           <ul className="pv-layers" data-testid="layer-list">
@@ -213,6 +226,7 @@ export default function PlanViewPage() {
             {plan.status_note && <div className="ls">{plan.status_note}</div>}
             {isMember && <Link className="linklike ls" to={`/plans/${plan.id}`}>עריכת הנתונים בתיק התכנית</Link>}
           </section>
+          <PlanStreets result={streetsRes} netUnits={f('housing', true).value} error={streetsErr} />
           <section className="card" data-testid="plan-sources">
             <div className="card-head"><h2>מסמכי מקור</h2></div>
             <ul className="src-list">

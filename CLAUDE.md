@@ -9,7 +9,7 @@ Read first: `docs/SPEC.md`, `docs/RULES.md`, `data/districts.json`, `reference/r
 ## Live
 - App: see Delivery below. Supabase project: ASHDODMAP (`cbhexpybdggwzyakgagd`), shared with other apps: only `mt_` objects belong here.
 - Code: `src/lib/rules.ts` (engine), `src/components/MapView.tsx` (map + layers), `src/pages/*`. Tests: `tests/rules.test.ts` (Vitest), `e2e/app.spec.ts` (Playwright, mocked Supabase from `e2e/fixtures.json`).
-- Run e2e here: `PW_CHROMIUM=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell npx playwright test`.
+- Run e2e here: `PW_CHROMIUM=/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell npx playwright test` (2026-11-03: the browser is now `/opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell`; port 4173 may be taken by another repo's preview, and `reuseExistingServer` then tests the wrong app: check it is free).
 
 ## Non-negotiables
 - Hebrew UI, full RTL. No icons or decorative symbols anywhere, including buttons.
@@ -131,6 +131,14 @@ Final URL + one line on what was built. Update this file.
 - `src/components/StreetWalk.tsx`: lon/lat to metres around the blue line's centre. "היום" = existing + demolish (red). "לפי התכנית" = existing + proposed volumes, envelope as glass. Missing heights use the 3D map's own defaults (9 m existing, 30 m proposed), stated as an assumption in the rule on screen.
 - Test: `e2e/app.spec.ts` "on the street" with `WALK_JS=<local walk.js>`. The installability test fails with full Chromium here (`in-incognito`), not from this change.
 - Corrections log: 2026-11-03 street view added at Anat's request to spread the eye-height walk (from a reel on spaceplanner.co).
+- Corrections log: 2026-11-03 municipal street layer (rehevot.shp) and "רחובות התכנית" on the plan page: from which street the plan is entered.
+
+## Plan streets (רחובות התכנית), 2026-11-03
+- Data: municipal street centrelines (rehevot.shp, 2,991 segments, from the city on 03.11.2026) as WGS84 GeoJSON in `public/geo/ashdod-streets.geojson` (props `c` CBS street code, `n` name, `q` quarter, `h` hierarchy; parking strips, hierarchy 9 and names "חני...", removed: 2,336 segments). No DB table. Geometry certainty `municipal`.
+- The city did not give the meaning of the hierarchy codes. Labels are inferred from names (certainty `assumption`): 1 שדרה ראשית, 2 רחוב ראשי, 3 רחוב מקומי, 4 מבוא או רחוב שכונתי, 8 כביש ארצי, 10 מדרחוב, 0 לא מסווג; 5 is not read (newer areas: רובע שמעון פרס, קרית פארק לכיש, northern industry) and shows "לא פוענחה".
+- `src/lib/planStreets.ts` (pure, `tests/planStreets.test.ts`): local metric projection, streets cut into 2 m pieces; "לאורך" = piece within 10 m of the blue line and within 30 degrees of parallel to it, "בתוך" = other pieces inside. Main street = ranks 1-2, inside + along. Units per metre of main street only with net units; unread ranks give "חסר", never zero.
+- Plan page card `src/components/PlanStreets.tsx` (insight, sentence, list, "מה זה אומר לתכנון", "איך נבדק" with certainty chips); map layer `plan_streets` in `PlanMap3D` (grey, width by rank, under the blue line).
+- Real numbers (03.11.2026): תמל/2022: 2 boulevards (שד הרצל 749 m inside, יצחק הנשיא 80 m along), 1,380 m main street of 1,694 m, 1.4 net units per metre (1,973 net). 603-0811588: 1,161 m along, all rank 5, so per metre is "חסר".
 
 ## A&I logo button
 The top bar holds only the app name (links home), content navigation, and ONE logo button "אד' ענת שטיבלמן A&I" (`<ai-menu>` from https://appofapp-gh.vercel.app/ai-menu.js). Every editing and development action (העתקת קישור, שיחת הפיתוח, פרויקט המחקר, התקנת האפליקציה, edit mode, add, delete) lives only inside it, never as loose buttons. Standard: https://github.com/Anat1969/AppOfApp-GH/blob/main/docs/ai-menu-standard.md

@@ -26,10 +26,10 @@ function infoHtml(layer: string, p: Record<string, unknown>) {
   return `<div class="pm-pop"><b>${title}</b>${rows.map((r) => `<div>${r}</div>`).join('')}</div>`;
 }
 
-export default function PlanMap3D({ layers, visible, mode, tashrit, bbox, drawing, onDrawPoint, draft, show = { envelope: true, volume: true }, orbit = false }: {
+export default function PlanMap3D({ layers, visible, mode, tashrit, bbox, drawing, onDrawPoint, draft, show = { envelope: true, volume: true }, orbit = false, streets = null }: {
   layers: MapLayerData[]; visible: Set<LayerKind>; mode: '2d' | '3d'; tashrit: Tashrit | null; bbox: [number, number, number, number] | null;
   drawing?: boolean; onDrawPoint?: (p: [number, number]) => void; draft?: number[][];
-  show?: { envelope: boolean; volume: boolean }; orbit?: boolean;
+  show?: { envelope: boolean; volume: boolean }; orbit?: boolean; streets?: GeoJSON.FeatureCollection | null;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
@@ -68,6 +68,10 @@ export default function PlanMap3D({ layers, visible, mode, tashrit, bbox, drawin
       const BL_COLOR = ['case', ['==', ['get', 'active'], 1], '#7a3fb0', '#c2185b'] as never;
       map.addLayer({ id: 'building_lines', type: 'line', source: 'building_lines', filter: ['!=', ['get', 'under'], 1], paint: { 'line-color': BL_COLOR, 'line-width': 1.6, 'line-dasharray': [4, 2] } });
       map.addLayer({ id: 'building_lines-under', type: 'line', source: 'building_lines', filter: ['==', ['get', 'under'], 1], paint: { 'line-color': BL_COLOR, 'line-width': 1.6, 'line-dasharray': [1, 1.5] } });
+      // the plan's streets (municipal centrelines): grey, width by rank, under the blue line; never blue
+      map.addSource('plan_streets', { type: 'geojson', data: EMPTY });
+      map.addLayer({ id: 'plan_streets-casing', type: 'line', source: 'plan_streets', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': ['+', ['coalesce', ['get', 'w'], 1.5], 2], 'line-opacity': 0.85 } });
+      map.addLayer({ id: 'plan_streets', type: 'line', source: 'plan_streets', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['match', ['get', 'h'], 1, '#3b3f46', 2, '#555b64', 8, '#3b3f46', '#7d838c'], 'line-width': ['coalesce', ['get', 'w'], 1.5] } });
       map.addLayer({ id: 'blue_line', type: 'line', source: 'blue_line', paint: { 'line-color': BLUE_LINE, 'line-width': 3.4 } });
       map.addLayer({ id: 'draft-line', type: 'line', source: 'draft', paint: { 'line-color': '#15181d', 'line-width': 2.2, 'line-dasharray': [2, 1] } });
       map.addLayer({ id: 'draft-pts', type: 'circle', source: 'draft', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 4.5, 'circle-color': '#fff', 'circle-stroke-color': '#15181d', 'circle-stroke-width': 2 } });
@@ -95,7 +99,8 @@ export default function PlanMap3D({ layers, visible, mode, tashrit, bbox, drawin
       (map.getSource(k) as GeoJSONSource).setData(layers.find((l) => l.kind === k)?.geojson ?? EMPTY);
     }
     (map.getSource('proposed-slabs') as GeoJSONSource).setData(slabs);
-  }, [layers, slabs, ready]);
+    (map.getSource('plan_streets') as GeoJSONSource | undefined)?.setData(streets ?? EMPTY);
+  }, [layers, slabs, ready, streets]);
 
   // fit once to the plan
   const fitted = useRef(false);
