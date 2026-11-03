@@ -412,3 +412,22 @@ tr.draft td { background: linear-gradient(90deg, rgba(246,236,217,0.55), rgba(24
   --sw-accent: var(--ink-2); --sw-problem: var(--fail); --sw-solution: var(--pass); --sw-marker: #f3e37c; --sw-font: var(--sans);
 }
 @media (max-width: 860px) { .pv-walk { height: auto; } }
+
+/* רחובות התכנית */
+.ps-card { display: grid; gap: 10px; grid-auto-rows: max-content; }
+.ps-insight { margin: 0; font-size: 19px; font-weight: 600; line-height: 1.35; color: var(--ink); }
+.ps-insight b { font-weight: 700; background: linear-gradient(transparent 58%, #f3e37c 58%); }
+.ps-explain { margin: 0; font-size: 14px; color: var(--ink-2); }
+.ps-explain b, .ps-means b { font-family: var(--mono); font-weight: 600; color: var(--ink); }
+.ps-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.ps-table th { text-align: start; font-weight: 500; color: var(--mute); font-size: 12px; padding: 4px 4px 6px; border-bottom: 1px solid var(--line); }
+.ps-table th:nth-child(3), .ps-table th:nth-child(4) { width: 64px; }
+.ps-table th:nth-child(2) { width: 34%; }
+.ps-table td { padding: 6px 4px; border-bottom: 1px solid var(--line-2); vertical-align: baseline; overflow-wrap: anywhere; }
+.ps-name { font-weight: 600; }
+.ps-rank { color: var(--ink-3); }
+.ps-w { display: inline-block; width: 16px; height: 2px; background: #7d838c; margin-inline-end: 6px; vertical-align: middle; border-radius: 2px; }
+.ps-w-1, .ps-w-8 { height: 5px; background: #3b3f46; } .ps-w-2 { height: 3.5px; background: #555b64; } .ps-w-3 { height: 2px; }
+.ps-means { display: grid; gap: 4px; padding: 10px 12px; background: var(--line-2); border-radius: 8px; font-size: 14px; }
+.ps-means h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-3); }
+.ps-how .chip { margin-inline-start: 4px; }

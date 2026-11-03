@@ -893,3 +893,36 @@ test('plan page: on the street, today against the plan at eye height', async ({ 
   expect(errors).toEqual([]);
 });
 
+
+test('plan page: the plan streets, from which street you enter (municipal layer)', async ({ page }) => {
+  await mock(page, { admin: true });
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/plan/603-0380584');
+  const card = page.getByTestId('plan-streets');
+  // fixture blue line of תמל/2022 against the real street layer in public/geo
+  await expect(card.getByTestId('ps-insight')).toHaveText('התכנית נשענת על 2 שדרות ראשיות', { timeout: 20000 });
+  await expect(card.getByTestId('ps-insight').locator('b')).toHaveText('2 שדרות ראשיות');
+  await expect(card.locator('tbody tr').first()).toContainText('שד הרצל');
+  await expect(card.locator('tbody tr').first()).toContainText('שדרה ראשית');
+  await expect(card.locator('tbody')).toContainText('יצחק הנשיא');
+  await expect(card.getByTestId('ps-means')).toContainText('כניסה מרכזית: שד הרצל');
+  await expect(card.getByTestId('ps-means')).toContainText('1.4 יח"ד נטו לכל מטר רחוב ראשי (1,973 יח"ד, 1,380 מ\')');
+  await expect(card.getByTestId('ps-how')).toContainText('10 מ\'');
+  await expect(card.getByTestId('ps-how')).toContainText('GIS עירוני');
+  await expect(card.getByTestId('ps-how')).toContainText('הנחת עבודה');
+  // drawn on the plan map as grey lines, never blue
+  await expect.poll(() => page.evaluate(() => { const m = (window as unknown as { __pmap: { getLayer: (l: string) => unknown; getSource: (s: string) => { serialize: () => { data: { features: unknown[] } } } } }).__pmap; return m.getLayer('plan_streets') ? m.getSource('plan_streets').serialize().data.features.length : -1; })).toBeGreaterThan(5);
+  const color = await page.evaluate(() => JSON.stringify((window as unknown as { __pmap: { getPaintProperty: (l: string, p: string) => unknown } }).__pmap.getPaintProperty('plan_streets', 'line-color')));
+  expect(color).not.toContain('#1d4ed8');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+  await page.waitForTimeout(600);
+  await page.getByTestId('plan-map').screenshot({ path: SHOTS + 'plan-streets-map-390.png' });
+  await card.scrollIntoViewIfNeeded();
+  await card.screenshot({ path: SHOTS + 'plan-streets-390.png' });
+  // 603-0811588 fixture: a square with no street ranks read: no invented zero
+  await page.goto('/plan/603-0811588');
+  await expect(page.getByTestId('plan-streets').getByTestId('ps-insight')).not.toBeEmpty({ timeout: 20000 });
+  expect(errors).toEqual([]);
+});
