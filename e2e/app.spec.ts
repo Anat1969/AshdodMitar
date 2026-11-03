@@ -26,7 +26,7 @@ async function mock(page: Page, opts: { admin: boolean; noSession?: boolean }) {
     // ai-menu.js: AI_MENU_JS points to a local copy when the network is closed
     if (url.href === 'https://appofapp-gh.vercel.app/ai-menu.js') return process.env.AI_MENU_JS ? route.fulfill({ path: process.env.AI_MENU_JS, contentType: 'application/javascript' }) : route.continue();
     // walk.js (shared <space-walk>): WALK_JS points to a local copy; three.js loads from jsdelivr
-    if (url.href === 'https://appofapp-gh.vercel.app/walk.js') return process.env.WALK_JS ? route.fulfill({ path: process.env.WALK_JS, contentType: 'application/javascript' }) : route.continue();
+    if (url.href === 'https://appofapp-gh.vercel.app/walk.js' || url.href === 'https://anat1969.github.io/AppOfApp-GH/walk.js') return process.env.WALK_JS ? route.fulfill({ path: process.env.WALK_JS, contentType: 'application/javascript' }) : route.continue();
     if (url.hostname === 'cdn.jsdelivr.net' && url.pathname.startsWith('/npm/three@')) return route.continue();
     if (url.hostname.endsWith('supabase.co')) {
       if (url.pathname.startsWith('/storage/v1/')) {
