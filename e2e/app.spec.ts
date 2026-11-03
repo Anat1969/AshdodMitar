@@ -25,6 +25,9 @@ async function mock(page: Page, opts: { admin: boolean; noSession?: boolean }) {
     if (url.hostname === 'localhost') return route.continue();
     // ai-menu.js: AI_MENU_JS points to a local copy when the network is closed
     if (url.href === 'https://appofapp-gh.vercel.app/ai-menu.js') return process.env.AI_MENU_JS ? route.fulfill({ path: process.env.AI_MENU_JS, contentType: 'application/javascript' }) : route.continue();
+    // walk.js (shared <space-walk>): WALK_JS points to a local copy; three.js loads from jsdelivr
+    if (url.href === 'https://appofapp-gh.vercel.app/walk.js') return process.env.WALK_JS ? route.fulfill({ path: process.env.WALK_JS, contentType: 'application/javascript' }) : route.continue();
+    if (url.hostname === 'cdn.jsdelivr.net' && url.pathname.startsWith('/npm/three@')) return route.continue();
     if (url.hostname.endsWith('supabase.co')) {
       if (url.pathname.startsWith('/storage/v1/')) {
         writes.push({ method: req.method(), table: 'storage:' + url.pathname.replace('/storage/v1/', ''), body: req.method() === 'DELETE' ? req.postDataJSON() : null, url: req.url() });
@@ -865,3 +868,28 @@ test('plan page is public: anonymous sees layers and approved data only', async 
   await page.goto('/plan/no-such-plan');
   await expect(page.getByText('אין במערכת תכנית')).toBeVisible();
 });
+
+test('plan page: on the street, today against the plan at eye height', async ({ page }) => {
+  test.skip(!process.env.WALK_JS, 'needs a local walk.js (WALK_JS)');
+  await mock(page, { admin: false });
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/plan/' + encodeURIComponent('תמל/2022'));
+  await page.getByRole('tab', { name: 'ברחוב' }).click();
+  await expect(page).toHaveURL(/view=walk/);
+  const walk = page.getByTestId('street-walk');
+  await expect(walk.locator('.msg')).toBeHidden({ timeout: 30000 });
+  await expect(walk.locator('.insight')).toContainText('היום');
+  await expect(walk.locator('.vnote')).toContainText('31');
+  await page.waitForTimeout(800);
+  await walk.screenshot({ path: SHOTS + 'street-today.png' });
+  await walk.locator('[data-variant="plan"]').click();
+  await expect(walk.locator('.insight')).toContainText('לפי התכנית');
+  await expect(walk.locator('.vnote')).toContainText('נפחים מוצעים');
+  await walk.locator('[data-view="top"]').click();
+  await page.waitForTimeout(800);
+  await walk.screenshot({ path: SHOTS + 'street-plan-top.png' });
+  expect(errors).toEqual([]);
+});
+

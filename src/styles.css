@@ -404,3 +404,11 @@ tr.draft td { background: linear-gradient(90deg, rgba(246,236,217,0.55), rgba(24
 /* building details popup */
 .pm-popup .maplibregl-popup-content { direction: rtl; font-family: var(--sans); font-size: 12.5px; border-radius: 10px; box-shadow: var(--shadow-2); padding: 9px 12px; }
 .pm-pop b { display: block; margin-bottom: 3px; }
+
+/* ברחוב: the plan at eye height (shared <space-walk>) */
+.pv-walk {
+  display: block; height: min(72vh, 640px); border: 1px solid var(--line); border-radius: 0;
+  --sw-ink: var(--ink); --sw-paper: var(--paper); --sw-card: var(--card); --sw-line: var(--line); --sw-muted: var(--mute);
+  --sw-accent: var(--ink-2); --sw-problem: var(--fail); --sw-solution: var(--pass); --sw-marker: #f3e37c; --sw-font: var(--sans);
+}
+@media (max-width: 860px) { .pv-walk { height: auto; } }

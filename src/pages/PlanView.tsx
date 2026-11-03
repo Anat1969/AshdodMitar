@@ -10,6 +10,7 @@ import { LAYER_TITLE, type LayerKind } from '../lib/planlayers';
 import { docUrl } from '../lib/docfile';
 import { pdfFirstPageToPng } from '../lib/pdfimage';
 import PlanMap3D, { type MapLayerData } from '../components/PlanMap3D';
+import StreetWalk from '../components/StreetWalk';
 import { demandFromUnits, GapLegend, GapRow, gapRows } from '../components/GapBars';
 import { Loading, Page } from '../components/ui';
 import type { Doc } from './Documents';
@@ -26,9 +27,11 @@ export default function PlanViewPage() {
   const [layers, setLayers] = useState<PlanLayerRow[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [sp, setSp] = useSearchParams();
-  // ?view=3d opens in 3D, so a link (and "העתקת קישור") can share the 3D view
-  const mode: '2d' | '3d' = sp.get('view') === '3d' ? '3d' : '2d';
-  const setMode = (m: '2d' | '3d') => { const n = new URLSearchParams(sp); if (m === '3d') n.set('view', '3d'); else n.delete('view'); setSp(n, { replace: true }); };
+  // ?view=3d opens in 3D and ?view=walk on the street, so a link (and "העתקת קישור") can share the view
+  const view = sp.get('view');
+  const walk = view === 'walk';
+  const mode: '2d' | '3d' = view === '3d' ? '3d' : '2d';
+  const setMode = (m: '2d' | '3d' | 'walk') => { const n = new URLSearchParams(sp); if (m === '2d') n.delete('view'); else n.set('view', m); setSp(n, { replace: true }); };
   const [visible, setVisible] = useState<Set<LayerKind>>(new Set(ORDER));
   const [opacity, setOpacity] = useState(0.6);
   const [tUrl, setTUrl] = useState<string | null>(null);
@@ -138,19 +141,21 @@ export default function PlanViewPage() {
         <section className="card pv-map">
           <div className="pv-tools">
             <div className="seg" role="tablist" aria-label="תצוגה">
-              <button type="button" role="tab" aria-selected={mode === '2d'} className={mode === '2d' ? 'on' : ''} onClick={() => setMode('2d')}>דו-ממד</button>
-              <button type="button" role="tab" aria-selected={mode === '3d'} className={mode === '3d' ? 'on' : ''} onClick={() => setMode('3d')}>תלת-ממד</button>
+              <button type="button" role="tab" aria-selected={!walk && mode === '2d'} className={!walk && mode === '2d' ? 'on' : ''} onClick={() => setMode('2d')}>דו-ממד</button>
+              <button type="button" role="tab" aria-selected={!walk && mode === '3d'} className={!walk && mode === '3d' ? 'on' : ''} onClick={() => setMode('3d')}>תלת-ממד</button>
+              <button type="button" role="tab" aria-selected={walk} className={walk ? 'on' : ''} onClick={() => setMode('walk')}>ברחוב</button>
             </div>
-            {mode === '3d' && hasEnv && <div className="seg" aria-label="מה מוצג בתלת-ממד">
+            {!walk && mode === '3d' && hasEnv && <div className="seg" aria-label="מה מוצג בתלת-ממד">
               <button type="button" aria-pressed={show.envelope} className={show.envelope ? 'on' : ''} onClick={() => setShow((x) => ({ ...x, envelope: !x.envelope }))}>מעטפת מותרת</button>
               <button type="button" aria-pressed={show.volume} className={show.volume ? 'on' : ''} onClick={() => setShow((x) => ({ ...x, volume: !x.volume }))}>נפח לדוגמה</button>
             </div>}
-            {mode === '3d' && <button type="button" className={`btn small ${orbit ? 'on' : ''}`} aria-pressed={orbit} onClick={() => setOrbit((o) => !o)}>{orbit ? 'עצירת הסיבוב' : 'סיבוב סביב התכנית'}</button>}
+            {!walk && mode === '3d' && <button type="button" className={`btn small ${orbit ? 'on' : ''}`} aria-pressed={orbit} onClick={() => setOrbit((o) => !o)}>{orbit ? 'עצירת הסיבוב' : 'סיבוב סביב התכנית'}</button>}
             {tl && <label className="pv-opacity">שקיפות התשריט<input type="range" min={0} max={1} step={0.05} value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} aria-label="שקיפות התשריט" /></label>}
           </div>
-          <PlanMap3D layers={mapLayers} visible={visible} mode={mode} bbox={bbox} tashrit={tl?.image_bounds && tUrl ? { url: tUrl, bounds: tl.image_bounds, opacity } : null}
-            drawing={drawing} onDrawPoint={(p) => setPts((x) => [...x, p])} draft={pts} show={show} orbit={orbit} />
-          {mode === '3d' && <div className="ls">{hasEnv ? 'מעטפת מותרת: קווי הבניין כפול הגובה המרבי, בזכוכית בהירה. נפח לדוגמה: בסיס ומגדל מחושבים משטחי טבלה 5, מחולקים לקומות.' : 'נפח מקורב: מגרש המגורים בגובה הקומות המותר.'} לחיצה על מבנה מציגה את נתוניו.</div>}
+          {walk ? <StreetWalk layers={mapLayers} bbox={bbox} title={`${plan.plan_number ?? ''} ${plan.name ?? ''}`.trim()} /> : <PlanMap3D layers={mapLayers} visible={visible} mode={mode} bbox={bbox} tashrit={tl?.image_bounds && tUrl ? { url: tUrl, bounds: tl.image_bounds, opacity } : null}
+            drawing={drawing} onDrawPoint={(p) => setPts((x) => [...x, p])} draft={pts} show={show} orbit={orbit} />}
+          {walk && <div className="ls">ברחוב: השכבות של התכנית בגובה העיניים. "היום" מול "לפי התכנית", עם הנפח לדוגמה ובזכוכית המעטפת המותרת.</div>}
+          {!walk && mode === '3d' && <div className="ls">{hasEnv ? 'מעטפת מותרת: קווי הבניין כפול הגובה המרבי, בזכוכית בהירה. נפח לדוגמה: בסיס ומגדל מחושבים משטחי טבלה 5, מחולקים לקומות.' : 'נפח מקורב: מגרש המגורים בגובה הקומות המותר.'} לחיצה על מבנה מציגה את נתוניו.</div>}
           <ul className="pv-layers" data-testid="layer-list">
             {kindsHere.map((k) => (
               <li key={k}>
